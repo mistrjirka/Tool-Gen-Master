@@ -63,23 +63,6 @@ UNSUP_TOPICS = [
     "What is the best way to remove a red wine stain from wool",
 ]
 
-_VERBS = [
-    "get",
-    "list",
-    "search",
-    "find",
-    "check",
-    "calculate",
-    "fetch",
-    "retrieve",
-    "query",
-    "lookup",
-    "count",
-    "compare",
-    "validate",
-    "estimate",
-]
-
 
 class Completer(Protocol):
     def __call__(
@@ -155,21 +138,9 @@ def build_writer_payload(goal: GoalRecord) -> dict[str, object]:
     and never exposes the witness calls themselves as structured data.
     """
     desired: list[dict[str, str]] = []
+    index = _tool_function_index(goal)
     for call in goal.witness:
-        readable = (
-            "".join(
-                " " + c if c.isupper() and i > 0 else c
-                for i, c in enumerate(call.name[len(_verb_prefix(call.name)) :])
-            )
-            .strip()
-            .lower()
-        )
-        parts = [
-            f"{_natural_key(k)} is {render_value(v)}" for k, v in call.arguments.items()
-        ]
-        info = f"{_verb_prefix(call.name)} {readable}"
-        if parts:
-            info += f" where {', '.join(parts)}"
+        info = _readable_need(call.name, dict(call.arguments), index.get(call.name))
         desired.append({"information": info})
     if goal.no_call:
         # Deterministic per goal id (not global RNG): the same goal always
@@ -194,23 +165,99 @@ def build_writer_payload(goal: GoalRecord) -> dict[str, object]:
     return payload
 
 
-def _verb_prefix(tool_name: str) -> str:
-    for verb in _VERBS:
-        if tool_name.lower().startswith(verb.lower()):
-            return verb
-    return "get"
+def _schema_reference_text(description: str) -> str:
+    """Omit only a trailing single-token illustration, never following semantics.
+
+    Bundled identifiers include examples such as ', e.g. CASE-601'. A fresh
+    writer probe promoted one into a user fact despite the prompt boundary.
+    Keep all contract text; omit only this end-anchored illustration shape.
+    """
+    return re.sub(
+        r",?\s+e\.g\.\s+[\w-]+\.?\s*$", "", description.strip(), flags=re.IGNORECASE
+    )
 
 
-def _readable_need(call_name: str, arguments: dict[str, object]) -> str:
-    """One need in plain words; chained refs verbalized, literals verbatim."""
-    readable = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", call_name).strip().lower()
-    parts = [
-        f"{_natural_key(str(k))} is {render_value(v)}" for k, v in arguments.items()
-    ]
-    info = readable
-    if parts:
-        info += f" where {', '.join(parts)}"
-    return info
+def _tool_function_index(goal: GoalRecord) -> dict[str, dict[str, object]]:
+    """Index goal tools by function name (generic over all catalogues)."""
+    index: dict[str, dict[str, object]] = {}
+    for entry in goal.tools:
+        if not isinstance(entry, dict):
+            continue
+        fn = entry.get("function")
+        if not isinstance(fn, dict):
+            continue
+        name = fn.get("name")
+        if isinstance(name, str) and name not in index:
+            index[name] = fn
+    return index
+
+
+def _describe_argument(key: str, value: object, prop: object) -> str:
+    """Render one supplied value with its schema meaning (generic).
+
+    Only listed values are goal facts; ``prop`` descriptions/examples
+    establish meanings. Descriptions lead so the writer sees semantics
+    (inclusive endpoints, units, bounds, projection roles) instead of a
+    parameter label; raw key names are never emitted when a description
+    exists. Nested objects recurse through their subschema descriptions.
+    """
+    schema: dict[str, object] = prop if isinstance(prop, dict) else {}
+    rendered = render_value(value)
+    if isinstance(value, dict):
+        sub_props = schema.get("properties")
+        if isinstance(sub_props, dict):
+            inner = "; ".join(
+                _describe_argument(str(k), v, sub_props.get(k))
+                for k, v in value.items()
+            )
+            desc = schema.get("description")
+            prefix = _schema_reference_text(desc) if isinstance(desc, str) else ""
+            if prefix:
+                return f"{prefix}: {{{inner}}}" if inner else f"{prefix}: {rendered}"
+            return "{" + inner + "}" if inner else rendered
+    desc = schema.get("description")
+    if isinstance(desc, str) and desc.strip():
+        return f"{_schema_reference_text(desc)}: {rendered}"
+    return f"{_natural_key(str(key))} is {rendered}"
+
+
+def _readable_need(
+    call_name: str,
+    arguments: dict[str, object],
+    tool_fn: dict[str, object] | None = None,
+) -> str:
+    """One need in plain words; chained refs verbalized, literals verbatim.
+
+    Generic and data-driven: each supplied value carries its parameter
+    description (endpoints, units, bounds, projection roles). The tool's
+    description is separately marked as capability reference, never extra
+    user selections. Raw parameter labels are omitted when descriptions
+    exist. Only supplied values are facts; schema text establishes meanings.
+    """
+    tool_fn = tool_fn or {}
+    op_desc = tool_fn.get("description")
+    if isinstance(op_desc, str) and op_desc.strip():
+        operation = _schema_reference_text(op_desc)
+    else:
+        operation = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", call_name).strip().lower()
+    props: dict[str, object] = {}
+    params = tool_fn.get("parameters")
+    if isinstance(params, dict):
+        raw_props = params.get("properties")
+        if isinstance(raw_props, dict):
+            props = raw_props
+    parts = [_describe_argument(str(k), v, props.get(k)) for k, v in arguments.items()]
+    requested = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", call_name).strip().lower()
+    choices = (
+        "\n".join(f"    - {part}" for part in parts)
+        if parts
+        else "    None: no argument values or optional constraints were supplied."
+    )
+    return (
+        f"Requested operation: {requested}\n"
+        f"  Supplied choices (the complete user selections):\n{choices}\n"
+        "  Capability reference only (not additional user selections): " + operation
+    )
 
 
 def render_goal_needs(goal: GoalRecord) -> list[str]:
@@ -218,7 +265,11 @@ def render_goal_needs(goal: GoalRecord) -> list[str]:
     if goal.no_call:
         topic = random.Random(f"unsup:{goal.id}").choice(UNSUP_TOPICS)
         return [topic]
-    return [_readable_need(call.name, dict(call.arguments)) for call in goal.witness]
+    index = _tool_function_index(goal)
+    return [
+        _readable_need(call.name, dict(call.arguments), index.get(call.name))
+        for call in goal.witness
+    ]
 
 
 def render_context_section(goal: GoalRecord) -> str:

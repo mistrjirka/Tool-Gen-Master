@@ -127,7 +127,7 @@ def cmd_writer(args: argparse.Namespace) -> int:
             "model": model,
             "max_usd": max_usd if max_usd is not None else "none",
             "limit": str(args.limit),
-            "input_format": "readable-v1",
+            "input_format": "readable-v2",
         },
         inputs=_input_files([goals_path]),
     )
@@ -289,7 +289,7 @@ def cmd_paraphrase(args: argparse.Namespace) -> int:
         config={
             "model": model,
             "max_usd": max_usd if max_usd is not None else "none",
-            "input_format": "readable-v1",
+            "input_format": "readable-v2",
         },
         inputs=_input_files(files),
     )

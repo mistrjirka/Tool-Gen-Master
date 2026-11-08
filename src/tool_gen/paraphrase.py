@@ -36,7 +36,6 @@ from tool_gen.writer import (
     Completer,
     render_context_section,
     render_goal_needs,
-    render_value,
 )
 
 NUM_PARAPHRASES = 3
@@ -53,13 +52,7 @@ class ParaphraseOutput(StrictModel):
 
 def verbalize_operations(goal: GoalRecord) -> list[str]:
     """Render witness calls as plain text with chained refs verbalized."""
-    lines: list[str] = []
-    for index, call in enumerate(goal.witness):
-        parts = [
-            f"{key}={render_value(value)}" for key, value in call.arguments.items()
-        ]
-        lines.append(f"{index + 1}. {call.name}({', '.join(parts)})")
-    return lines
+    return render_goal_needs(goal)
 
 
 def build_paraphrase_brief(goal: GoalRecord, request: str) -> str:

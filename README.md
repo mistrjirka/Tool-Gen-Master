@@ -85,8 +85,11 @@ missing artifacts and incomplete historical evidence are not guessed away.
 ## Writer inputs and creative variation
 
 The system instructions and readable-brief template are separate Markdown
-resources. Literal strings are quoted, numbers retain their types, camelCase
-labels are humanized, and all visible context is preserved. Template substitution
+resources. Literal strings are quoted, numbers retain their types, and all
+visible context is preserved. Each need carries its operation description
+plus the schema meanings of its supplied choices (inclusive endpoints,
+units, bounds, projection roles) without echoing parameter labels; schema
+illustrations are not facts. Template substitution
 is one-pass: names or records containing template-looking text stay unchanged.
 The client sends the rendered text itself, not JSON containing escaped newlines.
 Structured input remains useful internally; this is not a claim that Markdown
