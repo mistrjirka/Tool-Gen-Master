@@ -1,0 +1,152 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getRoute",
+      "description": "Read one transit route by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "routeId": {
+            "type": "string",
+            "description": "Route identifier; opaque identifier, copy exactly, e.g. RT-101",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: routeId, name, stops, frequency; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "routeId",
+                "name",
+                "stops",
+                "frequency"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "routeId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listDepartures",
+      "description": "List departures for a route or stop, optionally at/after an instant.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "routeId": {
+            "type": "string",
+            "description": "Route identifier; opaque identifier, copy exactly, e.g. RT-101",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "stopId": {
+            "type": "string",
+            "description": "Stop identifier; opaque identifier, copy exactly, e.g. STP-201",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "after": {
+            "type": "string",
+            "description": "Only departures at/after this instant; full instant YYYY-MM-DDTHH:MM with zone Z or +HH:MM, never date-only",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})$",
+            "minLength": 16,
+            "maxLength": 32
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getStop",
+      "description": "Read one stop by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "stopId": {
+            "type": "string",
+            "description": "Stop identifier; opaque identifier, copy exactly, e.g. STP-201",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: stopId, name, location, routes; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "stopId",
+                "name",
+                "location",
+                "routes"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "stopId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "searchRoutes",
+      "description": "Search routes by origin and destination.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string",
+            "description": "Origin location name, copy exactly",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "destination": {
+            "type": "string",
+            "description": "Destination location name, copy exactly",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "origin",
+          "destination"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+]

@@ -1,0 +1,172 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "searchBooks",
+      "description": "Find library books by author, genre, year or update instant.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "object",
+            "description": "Optional flat filter object with keys author (string, copy exactly), genre (one of: novel, essays, poetry, reference, comics), year (integer 1800..2030); omitted keys are not applied.",
+            "properties": {
+              "author": {
+                "type": "string",
+                "description": "Author display name, copy exactly",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "genre": {
+                "type": "string",
+                "description": "Genre; one of: novel, essays, poetry, reference, comics",
+                "enum": [
+                  "novel",
+                  "essays",
+                  "poetry",
+                  "reference",
+                  "comics"
+                ]
+              },
+              "year": {
+                "type": "integer",
+                "description": "Publication year",
+                "minimum": 1800,
+                "maximum": 2030
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          "updatedAfter": {
+            "type": "string",
+            "description": "Only books updated at/after this instant; full instant YYYY-MM-DDTHH:MM with zone Z or +HH:MM, never date-only",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})$",
+            "minLength": 16,
+            "maxLength": 32
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows, non-negative integer 0..50; omit for all",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getBook",
+      "description": "Read one book record by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "bookId": {
+            "type": "string",
+            "description": "Book identifier; opaque identifier, copy exactly, e.g. BK-101",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: bookId, title, author, genre, year, updatedAt; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "bookId",
+                "title",
+                "author",
+                "genre",
+                "year",
+                "updatedAt"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 6,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "bookId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listLoans",
+      "description": "List loans, optionally only one status and/or loans open on a date.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Loan status; omit for all; one of: on_loan, returned, overdue",
+            "enum": [
+              "on_loan",
+              "returned",
+              "overdue"
+            ]
+          },
+          "openOn": {
+            "type": "string",
+            "description": "Only loans open on this date; date-only YYYY-MM-DD, never a timestamp",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "minLength": 10,
+            "maxLength": 10
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getBorrower",
+      "description": "Read a borrower profile and all linked loan records by numeric id. The fields projection restricts the profile only; linked loans include all stored statuses.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "borrowerId": {
+            "type": "integer",
+            "description": "Borrower number, integer 1..9999, e.g. 301",
+            "minimum": 1,
+            "maximum": 9999
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of borrower keys to return; allowed keys: borrowerId, name; omit for full record",
+            "items": {
+              "type": "string",
+              "enum": [
+                "borrowerId",
+                "name"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "borrowerId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+]

@@ -1,0 +1,146 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getField",
+      "description": "Read one field by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "fieldId": {
+            "type": "string",
+            "description": "Field identifier; opaque identifier, copy exactly, e.g. FLD-501",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: fieldId, name, crop, area; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "fieldId",
+                "name",
+                "crop",
+                "area"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "fieldId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listCrops",
+      "description": "List crops by type and/or harvest date.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "cropType": {
+            "type": "string",
+            "description": "Crop type; one of: wheat, corn, soy, rice",
+            "enum": [
+              "wheat",
+              "corn",
+              "soy",
+              "rice"
+            ]
+          },
+          "harvestedAfter": {
+            "type": "string",
+            "description": "Only crops harvested after this date; date-only YYYY-MM-DD, never a timestamp",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "minLength": 10,
+            "maxLength": 10
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getWeather",
+      "description": "Get weather forecast for a location.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string",
+            "description": "Location name, copy exactly",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "date": {
+            "type": "string",
+            "description": "Forecast date; date-only YYYY-MM-DD, never a timestamp",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "minLength": 10,
+            "maxLength": 10
+          }
+        },
+        "required": [
+          "location",
+          "date"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listEquipment",
+      "description": "List farm equipment by type and status.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Equipment type; one of: tractor, harvester, irrigator, sensor",
+            "enum": [
+              "tractor",
+              "harvester",
+              "irrigator",
+              "sensor"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "Status; one of: active, maintenance, idle",
+            "enum": [
+              "active",
+              "maintenance",
+              "idle"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  }
+]

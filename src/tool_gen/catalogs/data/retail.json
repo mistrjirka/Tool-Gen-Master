@@ -1,0 +1,151 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getOrder",
+      "description": "Read one order by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "description": "Order identifier; opaque identifier, copy exactly, e.g. ORD-801",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: orderId, customer, total, status; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "orderId",
+                "customer",
+                "total",
+                "status"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "orderId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listOrders",
+      "description": "List orders by status and/or date.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Order status; one of: pending, shipped, delivered, cancelled",
+            "enum": [
+              "pending",
+              "shipped",
+              "delivered",
+              "cancelled"
+            ]
+          },
+          "after": {
+            "type": "string",
+            "description": "Only orders placed after this instant; full instant YYYY-MM-DDTHH:MM with zone Z or +HH:MM, never date-only",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})$",
+            "minLength": 16,
+            "maxLength": 32
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getCustomer",
+      "description": "Read one customer by their identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "description": "Customer identifier; opaque identifier, copy exactly, e.g. CUST-901",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: customerId, name, email, tier; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "customerId",
+                "name",
+                "email",
+                "tier"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "customerId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "searchProducts",
+      "description": "Search products by name and/or category.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Product name, copy exactly",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "category": {
+            "type": "string",
+            "description": "Category; one of: electronics, clothing, food, books",
+            "enum": [
+              "electronics",
+              "clothing",
+              "food",
+              "books"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  }
+]

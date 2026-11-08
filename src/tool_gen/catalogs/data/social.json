@@ -1,0 +1,122 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getPost",
+      "description": "Read one post by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "postId": {
+            "type": "string",
+            "description": "Post identifier; opaque identifier, copy exactly, e.g. POST-1201",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: postId, author, content, likes; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "postId",
+                "author",
+                "content",
+                "likes"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "postId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listComments",
+      "description": "List comments for a post.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "postId": {
+            "type": "string",
+            "description": "Post identifier; opaque identifier, copy exactly, e.g. POST-1201",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "postId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getUser",
+      "description": "Read one user profile by username.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "Username, copy exactly",
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "searchPosts",
+      "description": "Search posts by keyword and/or author.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "description": "Search keyword",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "author": {
+            "type": "string",
+            "description": "Author username, copy exactly",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  }
+]

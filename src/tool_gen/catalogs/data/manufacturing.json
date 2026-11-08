@@ -1,0 +1,150 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getMachine",
+      "description": "Read one machine by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "machineId": {
+            "type": "string",
+            "description": "Machine identifier; opaque identifier, copy exactly, e.g. MCH-1001",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: machineId, name, status, location; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "machineId",
+                "name",
+                "status",
+                "location"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "machineId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listMaintenance",
+      "description": "List maintenance records for a machine.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "machineId": {
+            "type": "string",
+            "description": "Machine identifier; opaque identifier, copy exactly, e.g. MCH-1001",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "after": {
+            "type": "string",
+            "description": "Only maintenance after this instant; full instant YYYY-MM-DDTHH:MM with zone Z or +HH:MM, never date-only",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})$",
+            "minLength": 16,
+            "maxLength": 32
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "machineId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getPart",
+      "description": "Read one part by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "partId": {
+            "type": "string",
+            "description": "Part identifier; opaque identifier, copy exactly, e.g. PRT-1101",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: partId, name, stock, supplier; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "partId",
+                "name",
+                "stock",
+                "supplier"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "partId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listProduction",
+      "description": "List production runs by status and/or date.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Production status; one of: running, completed, failed, scheduled",
+            "enum": [
+              "running",
+              "completed",
+              "failed",
+              "scheduled"
+            ]
+          },
+          "date": {
+            "type": "string",
+            "description": "Production date; date-only YYYY-MM-DD, never a timestamp",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "minLength": 10,
+            "maxLength": 10
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  }
+]

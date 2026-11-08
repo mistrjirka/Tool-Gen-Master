@@ -1,0 +1,136 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getDailySales",
+      "description": "Daily sales total for a date, optionally one region.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Trading date; date-only YYYY-MM-DD, never a timestamp",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "minLength": 10,
+            "maxLength": 10
+          },
+          "region": {
+            "type": "string",
+            "description": "Region; omit for all regions; one of: north, south, east, west",
+            "enum": [
+              "north",
+              "south",
+              "east",
+              "west"
+            ]
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getProduct",
+      "description": "Read one product by sku.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sku": {
+            "type": "string",
+            "description": "Stock keeping unit; opaque identifier, copy exactly, e.g. SKU-2001",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: sku, name, price; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sku",
+                "name",
+                "price"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "sku"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listRefunds",
+      "description": "List refunds, optionally one status, minimum decimal amount, processed-after instant.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Refund status; omit for all; one of: pending, approved, rejected",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ]
+          },
+          "minAmount": {
+            "type": "number",
+            "description": "Minimum refund amount, decimal JSON number allowed, 0..100000",
+            "minimum": 0.0,
+            "maximum": 100000.0
+          },
+          "processedAfter": {
+            "type": "string",
+            "description": "Only refunds processed at/after this instant; full instant YYYY-MM-DDTHH:MM with zone Z or +HH:MM, never date-only",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})$",
+            "minLength": 16,
+            "maxLength": 32
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getStore",
+      "description": "Read one store by its display name (name-valued, no id lookup).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "storeName": {
+            "type": "string",
+            "description": "Store display name, copy exactly",
+            "minLength": 1,
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "storeName"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+]

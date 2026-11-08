@@ -1,0 +1,150 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getMeter",
+      "description": "Read one energy meter and its tariff.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "meterId": {
+            "type": "string",
+            "description": "Meter identifier; opaque identifier, copy exactly, e.g. MTR-7001",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: meterId, site, tariffCode; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "meterId",
+                "site",
+                "tariffCode"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "meterId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listReadings",
+      "description": "Return matching meter readings in an inclusive instant window and their summed kWh. The total covers the returned rows after all filters and the limit.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "meterId": {
+            "type": "string",
+            "description": "Meter identifier; opaque identifier, copy exactly, e.g. MTR-7001",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fromInstant": {
+            "type": "string",
+            "description": "Window start, inclusive; full instant YYYY-MM-DDTHH:MM with zone Z or +HH:MM, never date-only",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})$",
+            "minLength": 16,
+            "maxLength": 32
+          },
+          "toInstant": {
+            "type": "string",
+            "description": "Window end, inclusive; full instant YYYY-MM-DDTHH:MM with zone Z or +HH:MM, never date-only",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})$",
+            "minLength": 16,
+            "maxLength": 32
+          },
+          "minKwh": {
+            "type": "number",
+            "description": "Minimum reading kwh, decimal JSON number allowed, 0..1000",
+            "minimum": 0.0,
+            "maximum": 1000.0
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "meterId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getTariff",
+      "description": "Read one tariff definition.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tariffCode": {
+            "type": "string",
+            "description": "Tariff code; one of: flat, day_night, spot",
+            "enum": [
+              "flat",
+              "day_night",
+              "spot"
+            ]
+          }
+        },
+        "required": [
+          "tariffCode"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listOutages",
+      "description": "List outages of one status, optionally starting on/after a date.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Outage status; one of: planned, active, restored",
+            "enum": [
+              "planned",
+              "active",
+              "restored"
+            ]
+          },
+          "afterDate": {
+            "type": "string",
+            "description": "Only outages starting on/after this date; date-only YYYY-MM-DD, never a timestamp",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "minLength": 10,
+            "maxLength": 10
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+]

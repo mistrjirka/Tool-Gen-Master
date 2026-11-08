@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tool-gen"
+version = "0.1.0"
+description = "Standalone current-generation pipeline for human-like tool-calling data"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.7",
+    "jsonschema>=4.0",
+    # Directly imported (typing_extensions.Self); Pydantic also requires it.
+    "typing-extensions>=4.6.1",
+]
+
+[project.scripts]
+tool-gen = "tool_gen.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+tool_gen = ["catalogs/data/*.json", "prompts/**/*.md"]

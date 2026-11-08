@@ -1,0 +1,145 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getSample",
+      "description": "Read one laboratory sample.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sampleId": {
+            "type": "string",
+            "description": "Sample identifier; opaque identifier, copy exactly, e.g. SMP-6001",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: sampleId, sampleType, collectedOn, site; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sampleId",
+                "sampleType",
+                "collectedOn",
+                "site"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "sampleId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listSamples",
+      "description": "List samples of one type, optionally collected on a date.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sampleType": {
+            "type": "string",
+            "description": "Sample type; one of: soil, water, swab, tissue",
+            "enum": [
+              "soil",
+              "water",
+              "swab",
+              "tissue"
+            ]
+          },
+          "collectedOn": {
+            "type": "string",
+            "description": "Only samples collected on this date; date-only YYYY-MM-DD, never a timestamp",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "minLength": 10,
+            "maxLength": 10
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "sampleType"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getAssay",
+      "description": "Read one assay definition by code.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "assayCode": {
+            "type": "string",
+            "description": "Assay code, copy exactly e.g. PCR-16S",
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "assayCode"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listAssayRuns",
+      "description": "List assay runs of one outcome, optionally min decimal yield and/or completion instant.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "description": "Run outcome; one of: pass, fail, inconclusive",
+            "enum": [
+              "pass",
+              "fail",
+              "inconclusive"
+            ]
+          },
+          "minYield": {
+            "type": "number",
+            "description": "Minimum yield 0..1, decimal JSON number",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "completedAfter": {
+            "type": "string",
+            "description": "Only runs completed at/after this instant; full instant YYYY-MM-DDTHH:MM with zone Z or +HH:MM, never date-only",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})$",
+            "minLength": 16,
+            "maxLength": 32
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+]

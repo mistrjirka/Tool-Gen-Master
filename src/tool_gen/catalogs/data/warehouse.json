@@ -1,0 +1,143 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getItem",
+      "description": "Read one stored item by sku.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sku": {
+            "type": "string",
+            "description": "Stock keeping unit; opaque identifier, copy exactly, e.g. WH-9001",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of item keys to return; allowed keys: sku, name, binCode; omit for full record",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sku",
+                "name",
+                "binCode"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "sku"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listMovements",
+      "description": "Return matching stock movement records and their summed quantity, optionally for one sku and/or at or after an instant. The total covers returned rows after the limit.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "direction": {
+            "type": "string",
+            "description": "Movement direction; one of: inbound, outbound, transfer",
+            "enum": [
+              "inbound",
+              "outbound",
+              "transfer"
+            ]
+          },
+          "sku": {
+            "type": "string",
+            "description": "Sku filter; omit for all; opaque identifier, copy exactly, e.g. WH-9001",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "afterInstant": {
+            "type": "string",
+            "description": "Only movements at/after this instant; full instant YYYY-MM-DDTHH:MM with zone Z or +HH:MM, never date-only",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})$",
+            "minLength": 16,
+            "maxLength": 32
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "direction"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getBin",
+      "description": "Read one storage bin by code and the items stored in that bin.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "binCode": {
+            "type": "string",
+            "description": "Bin code, copy exactly e.g. A-12",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        },
+        "required": [
+          "binCode"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listStocktakes",
+      "description": "List stocktakes with one result, optionally counted on a date.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "Count result; one of: match, shortage, surplus",
+            "enum": [
+              "match",
+              "shortage",
+              "surplus"
+            ]
+          },
+          "countedOn": {
+            "type": "string",
+            "description": "Only stocktakes counted on this date; date-only YYYY-MM-DD, never a timestamp",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "minLength": 10,
+            "maxLength": 10
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+]

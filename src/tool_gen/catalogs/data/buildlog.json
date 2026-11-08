@@ -1,0 +1,161 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getBuild",
+      "description": "Read one software build record.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "buildId": {
+            "type": "string",
+            "description": "Build identifier; opaque identifier, copy exactly, e.g. BLD-4001",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: buildId, branch, status, startedOn, durationMin; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "buildId",
+                "branch",
+                "status",
+                "startedOn",
+                "durationMin"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 5,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "buildId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listBuilds",
+      "description": "List builds of one status, optionally one branch and/or start date.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Build status; one of: passed, failed, running",
+            "enum": [
+              "passed",
+              "failed",
+              "running"
+            ]
+          },
+          "branch": {
+            "type": "string",
+            "description": "Branch name, copy exactly; omit for all",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "startedOn": {
+            "type": "string",
+            "description": "Only builds started on this date; date-only YYYY-MM-DD, never a timestamp",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "minLength": 10,
+            "maxLength": 10
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getAlert",
+      "description": "Read one alert by numeric id.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "alertId": {
+            "type": "integer",
+            "description": "Alert number, integer 1..99999, e.g. 501",
+            "minimum": 1,
+            "maximum": 99999
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: alertId, severity, buildId, raisedAt; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "alertId",
+                "severity",
+                "buildId",
+                "raisedAt"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "alertId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listAlerts",
+      "description": "List alerts of one severity, optionally only at/after an instant.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "severity": {
+            "type": "string",
+            "description": "Severity; one of: info, warning, critical",
+            "enum": [
+              "info",
+              "warning",
+              "critical"
+            ]
+          },
+          "since": {
+            "type": "string",
+            "description": "Only alerts raised at or after this instant; full instant YYYY-MM-DDTHH:MM with zone Z or +HH:MM, never date-only",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})$",
+            "minLength": 16,
+            "maxLength": 32
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "severity"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+]

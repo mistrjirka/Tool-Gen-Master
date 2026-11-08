@@ -1,0 +1,150 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getPolicy",
+      "description": "Read one insurance policy by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "type": "string",
+            "description": "Policy identifier; opaque identifier, copy exactly, e.g. POL-1301",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: policyId, holder, type, premium; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "policyId",
+                "holder",
+                "type",
+                "premium"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "policyId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listClaims",
+      "description": "List claims for a policy or status.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "type": "string",
+            "description": "Policy identifier; opaque identifier, copy exactly, e.g. POL-1301",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "status": {
+            "type": "string",
+            "description": "Claim status; one of: filed, reviewing, approved, denied",
+            "enum": [
+              "filed",
+              "reviewing",
+              "approved",
+              "denied"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getClaim",
+      "description": "Read one claim by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "claimId": {
+            "type": "string",
+            "description": "Claim identifier; opaque identifier, copy exactly, e.g. CLM-1401",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: claimId, policyId, amount, status; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "claimId",
+                "policyId",
+                "amount",
+                "status"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "claimId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "searchPolicies",
+      "description": "Search policies by holder name and/or type.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "holder": {
+            "type": "string",
+            "description": "Policy holder name, copy exactly",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "type": {
+            "type": "string",
+            "description": "Policy type; one of: auto, home, health, life",
+            "enum": [
+              "auto",
+              "home",
+              "health",
+              "life"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  }
+]

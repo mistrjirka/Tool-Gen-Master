@@ -1,0 +1,145 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getAsset",
+      "description": "Read one media asset by numeric id.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "assetId": {
+            "type": "integer",
+            "description": "Asset number, integer 1..99999, e.g. 801",
+            "minimum": 1,
+            "maximum": 99999
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: assetId, kind, title, publishedOn; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "assetId",
+                "kind",
+                "title",
+                "publishedOn"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "assetId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listAssets",
+      "description": "List assets of one kind, optionally published on/after a date.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Asset kind; one of: photo, clip, audio, graphic",
+            "enum": [
+              "photo",
+              "clip",
+              "audio",
+              "graphic"
+            ]
+          },
+          "publishedAfter": {
+            "type": "string",
+            "description": "Only assets published on/after this date; date-only YYYY-MM-DD, never a timestamp",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "minLength": 10,
+            "maxLength": 10
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getArticle",
+      "description": "Read one article by its slug identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "articleId": {
+            "type": "string",
+            "description": "Article slug; opaque identifier, copy exactly, e.g. ART-city-bees",
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "articleId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listRevisions",
+      "description": "List revisions with one editorial decision, optionally one article and/or review instant.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "description": "Editorial decision; one of: approved, changes_requested, rejected",
+            "enum": [
+              "approved",
+              "changes_requested",
+              "rejected"
+            ]
+          },
+          "articleId": {
+            "type": "string",
+            "description": "Article slug filter; omit for all; opaque identifier, copy exactly, e.g. ART-city-bees",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "reviewedAfter": {
+            "type": "string",
+            "description": "Only revisions reviewed at/after this instant; full instant YYYY-MM-DDTHH:MM with zone Z or +HH:MM, never date-only",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(Z|[+-]\\d{2}:?\\d{2})$",
+            "minLength": 16,
+            "maxLength": 32
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+]

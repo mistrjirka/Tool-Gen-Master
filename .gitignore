@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+*.pyo
+dist/
+build/
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local stage runs (ledgers, manifests, raw requests/data/API logs) are never published.
+runs/
+
+# Generated data files are never committed; only aggregate observations in docs.
+*.jsonl
+
+# Local secrets are never committed; an example template may be added explicitly.
+.env
+.env.*
+!.env.example

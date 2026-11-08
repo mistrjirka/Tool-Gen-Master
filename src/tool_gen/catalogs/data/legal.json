@@ -1,0 +1,148 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getCase",
+      "description": "Read one legal case by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "description": "Case identifier; opaque identifier, copy exactly, e.g. CASE-601",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: caseId, title, status, filedDate; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "caseId",
+                "title",
+                "status",
+                "filedDate"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "caseId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listHearings",
+      "description": "List hearings for a case or date.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "description": "Case identifier; opaque identifier, copy exactly, e.g. CASE-601",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "date": {
+            "type": "string",
+            "description": "Hearing date; date-only YYYY-MM-DD, never a timestamp",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "minLength": 10,
+            "maxLength": 10
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "searchStatutes",
+      "description": "Search statutes by keyword and jurisdiction.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "description": "Search keyword",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "jurisdiction": {
+            "type": "string",
+            "description": "Jurisdiction; one of: federal, state, local",
+            "enum": [
+              "federal",
+              "state",
+              "local"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "keyword"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getDocument",
+      "description": "Read one legal document by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "docId": {
+            "type": "string",
+            "description": "Document identifier; opaque identifier, copy exactly, e.g. DOC-701",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: docId, title, type, filedDate; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "docId",
+                "title",
+                "type",
+                "filedDate"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "docId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+]

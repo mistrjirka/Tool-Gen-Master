@@ -1,0 +1,144 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "getHotel",
+      "description": "Read one hotel by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "hotelId": {
+            "type": "string",
+            "description": "Hotel identifier; opaque identifier, copy exactly, e.g. HTL-301",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: hotelId, name, rating, city; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "hotelId",
+                "name",
+                "rating",
+                "city"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "hotelId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "searchHotels",
+      "description": "Search hotels by city and minimum rating.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "City name, copy exactly",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "minRating": {
+            "type": "number",
+            "description": "Minimum star rating, 0..5",
+            "minimum": 0.0,
+            "maximum": 5.0
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "getRoom",
+      "description": "Read one room by its identifier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "roomId": {
+            "type": "string",
+            "description": "Room identifier; opaque identifier, copy exactly, e.g. RM-401",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "fields": {
+            "type": "array",
+            "description": "Optional projection: subset of record keys to return; allowed keys: roomId, type, price, available; omit for full records",
+            "items": {
+              "type": "string",
+              "enum": [
+                "roomId",
+                "type",
+                "price",
+                "available"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "roomId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "listReservations",
+      "description": "List reservations for a hotel or guest.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "hotelId": {
+            "type": "string",
+            "description": "Hotel identifier; opaque identifier, copy exactly, e.g. HTL-301",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "guestName": {
+            "type": "string",
+            "description": "Guest name, copy exactly",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max rows to return, non-negative integer 0..50; omit for all rows",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  }
+]
