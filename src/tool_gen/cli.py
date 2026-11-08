@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections import Counter
 from pathlib import Path
 
 from tool_gen.client import DEFAULT_MODEL, BudgetedClient, ClientError
@@ -12,6 +13,7 @@ from tool_gen.store import (
     InputFile,
     StageContext,
     StageError,
+    collect_reader_files,
     collect_stage_files,
     ensure_unique_ids,
     hash_file,
@@ -110,20 +112,22 @@ def cmd_writer(args: argparse.Namespace) -> int:
         raise StageError("internal: model must resolve to a string")
     if max_usd is not None and not isinstance(max_usd, str):
         raise StageError("internal: max_usd must resolve to a string or None")
-    from tool_gen.prompts import writer_prompt
+    from tool_gen.prompts import load_prompt, writer_prompt
 
     system = writer_prompt()
+    prompt_provenance = system + "\n\n" + load_prompt("writer", "brief_template")
     ctx = StageContext(
         stage="writer",
         shard_dir=shard_dir,
         shard=args.shard,
         shards=args.shards,
-        prompt_text=system,
+        prompt_text=prompt_provenance,
         config={
             "temperature": str(args.temperature),
             "model": model,
             "max_usd": max_usd if max_usd is not None else "none",
             "limit": str(args.limit),
+            "input_format": "readable-v1",
         },
         inputs=_input_files([goals_path]),
     )
@@ -146,6 +150,8 @@ def _collect_writer_entries(path: Path) -> list[dict[str, object]]:
     entries: list[dict[str, object]] = []
     for found in collect_stage_files(path, "results.jsonl"):
         for row in read_jsonl_strict(found):
+            if row.get("decision", "accept") != "accept":
+                continue
             if not isinstance(row.get("goal"), dict) or not row.get("request"):
                 continue
             entries.append({"goal": row["goal"], "request": row["request"]})
@@ -168,6 +174,33 @@ def cmd_reader(args: argparse.Namespace) -> int:
     input_path = Path(args.input)
     files = collect_stage_files(input_path, "results.jsonl")
     entries = _collect_writer_entries(input_path)
+    if args.max_attempts < 1:
+        raise StageError("--max-attempts must be at least 1")
+    replay_files: list[Path] = []
+    if args.replay_from:
+        from tool_gen.triage import replay_ids
+
+        replay_path = Path(args.replay_from)
+        source_root = replay_path if replay_path.is_dir() else replay_path.parent
+        source_root = source_root.resolve()
+        output_root = Path(args.out).resolve()
+        if output_root.is_relative_to(source_root) or source_root.is_relative_to(
+            output_root
+        ):
+            raise StageError(
+                "reader replay needs a fresh output root outside its source results"
+            )
+        replay_files = collect_reader_files(replay_path)
+        previous = [row for path in replay_files for row in read_jsonl_strict(path)]
+        selected_ids = replay_ids(previous)
+        entries = [
+            entry
+            for entry in entries
+            if isinstance(entry["goal"], dict)
+            and entry["goal"].get("id") in selected_ids
+        ]
+        if not entries:
+            raise StageError("no unresolved source IDs matched --replay-from results")
     shard_dir = _shard_dir(Path(args.out), args.shard)
     kwargs = _client_kwargs(args)
     max_usd = kwargs["max_usd"]
@@ -189,13 +222,20 @@ def cmd_reader(args: argparse.Namespace) -> int:
             "temperature": str(args.temperature),
             "model": model,
             "max_usd": max_usd if max_usd is not None else "none",
+            "max_attempts": str(args.max_attempts),
+            "comparison": "schema-instants-v1",
+            "reader_contract": "argument-slots-v1",
         },
-        inputs=_input_files(files),
+        inputs=_input_files(files + replay_files),
     )
     with BudgetedClient(str(shard_dir), max_usd=max_usd, model=model) as client:
         try:
             stats = run_reader(
-                entries, ctx, client.complete, temperature=args.temperature
+                entries,
+                ctx,
+                client.complete,
+                temperature=args.temperature,
+                max_attempts=args.max_attempts,
             )
         except AbortError as exc:
             print(
@@ -246,7 +286,11 @@ def cmd_paraphrase(args: argparse.Namespace) -> int:
         shard=args.shard,
         shards=args.shards,
         prompt_text=system,
-        config={"model": model, "max_usd": max_usd if max_usd is not None else "none"},
+        config={
+            "model": model,
+            "max_usd": max_usd if max_usd is not None else "none",
+            "input_format": "readable-v1",
+        },
         inputs=_input_files(files),
     )
     with BudgetedClient(str(shard_dir), max_usd=max_usd, model=model) as client:
@@ -312,6 +356,42 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_triage(args: argparse.Namespace) -> int:
+    from tool_gen.triage import triage_entries, triage_summary
+
+    entries = _collect_writer_entries(Path(args.input))
+    results = [
+        row
+        for path in collect_reader_files(Path(args.results))
+        for row in read_jsonl_strict(path)
+    ]
+    reports = triage_entries(entries, results)
+    if args.output:
+        out = Path(args.output)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(
+            "".join(strict_dumps(row) + "\n" for row in reports), encoding="utf-8"
+        )
+    else:
+        for row in reports:
+            print(strict_dumps(row))
+    categories = Counter(str(row.get("category", "unknown")) for row in reports)
+    print(
+        strict_dumps(
+            {
+                "mode": "offline-triage",
+                "source_rows": len(entries),
+                "reader_rows": len(results),
+                "coverage": triage_summary(reports),
+                "categories": dict(categories),
+                "fresh_model_requests": 0,
+            }
+        ),
+        file=sys.stderr,
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="tool-gen", description="Standalone current-generation pipeline"
@@ -351,6 +431,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", required=True, help="stage root; this shard uses <root>/shard-N"
     )
     r.add_argument("--temperature", type=float, default=0.0)
+    r.add_argument(
+        "--max-attempts",
+        type=int,
+        default=2,
+        help="bounded blind reader attempts per valid goal (default: 2)",
+    )
+    r.add_argument(
+        "--replay-from",
+        default=None,
+        help="prior reader result file/root; retry only unresolved IDs in a fresh output root",
+    )
     _add_stage_args(r)
     r.set_defaults(func=cmd_reader)
 
@@ -385,6 +476,19 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("--input", nargs="+", required=True)
     an.add_argument("--output", default=None)
     an.set_defaults(func=cmd_analyze)
+
+    tr = sub.add_parser(
+        "triage",
+        help="offline analysis of reader matches, differences and unresolved errors",
+    )
+    tr.add_argument("--input", required=True, help="writer result file/root")
+    tr.add_argument("--results", required=True, help="reader result file/root")
+    tr.add_argument(
+        "--output",
+        default=None,
+        help="JSONL assessment, not a fresh verification proof",
+    )
+    tr.set_defaults(func=cmd_triage)
 
     return p
 

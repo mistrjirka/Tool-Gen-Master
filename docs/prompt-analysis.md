@@ -2,8 +2,10 @@
 
 ## Scope and evidence
 
-This is a source-and-artifact audit, not a new LLM-quality experiment. The source
-is the active bias-fixed pipeline formerly under
+The initial sections are a source-and-artifact audit of the migration baseline.
+The later repair-validation section records bounded fresh service checks, not a
+new bulk dataset or downstream training experiment. The original source is the
+active bias-fixed pipeline formerly under
 `mobile-rl-pilot/tool_composition_v3/`, not the superseded procedural generators.
 
 Evidence inspected:
@@ -17,8 +19,10 @@ Evidence inspected:
   examined; passing examples were not assumed good.
 - Original writer, reader, paraphraser, goal sampler and tool declarations.
 
-No paid generation, training, promotion or benchmark rerun was performed for this
-migration. These remain synthetic data, not newly imported human-source requests.
+The initial migration performed no paid generation, training, promotion or
+benchmark rerun. Subsequent repairs used the small live checks documented below;
+there was still no bulk generation or training. These remain synthetic data, not
+newly imported human-source requests.
 “Writer accepted”, “reader matched”, “schema-valid” and “human-like” are different
 claims.
 
@@ -169,40 +173,109 @@ The old “six interpretation errors are mostly reader noise” categorization w
 too coarse. An error may expose both a source defect and a reader-contract defect.
 Likewise, writer/reader acceptance cannot serve as a complete naturalness check.
 
-## Changes made by extraction vs work still proposed
+## Initial extraction (commit 64590b9)
 
-Implemented: standalone modules and resources; no old absolute imports; shared
+Implemented at migration: standalone modules and resources; no old absolute imports; shared
 JSONL/run handling; separate model settings; full declared schemas and visible
 context for the reader; uncapped call arrays; clearer error provenance; descriptive
 pattern reports; soft rather than enforced lexical diversity guidance.
 
-Preserved as a reproducible baseline: domain/call/style sampling, opaque ID
-generation, generic value pools, experimental chaining and the overbroad
-near-duplicate rule. The port is not advertised as a new high-quality dataset.
-Frozen datasets, training renderers/scorers and saved benchmark outputs are not
-modified. Reader-prompt changes have not been validated with fresh inference here.
+At that commit, domain/call/style sampling, generic value pools, experimental
+chaining and the overbroad duplicate rule were preserved for reproducibility.
+The repairs below deliberately change the flawed sampling rules, not frozen data.
+There is still no claim of a replacement high-quality dataset or better downstream
+performance. Frozen datasets, renderers, scorers and benchmark outputs stay unchanged.
 
 ## Proposed improvements, not blanket rules
 
-1. **Fix mechanical construction first:** visible-tool membership, schema-first
-   enum/type/range sampling and correct no-call capability labels. These have
-   concrete correctness evidence, unlike aesthetic preferences.
-2. **Ground entities and values:** meaningful domain values and real visible
-   name↔ID mappings where needed. Keep ID-only requests as part of the range.
-3. **Make dependency semantics real:** output schemas, field/collection selectors,
-   compatible argument types and stable references through any reordering.
-4. **Improve the intent payload:** preserve typed constraints and their scope
-   without priming a field-by-field transcript. Keep explicit independent needs
-   independent; do not invent a story to connect them.
-5. **Review diversity conditionally:** styles, lengths, openings and repeated
-   patterns conditioned on call count/domain/intent, rather than a universal
-   “good” distribution. Lists and concise technical requests may be appropriate.
-6. **Evaluate semantic fidelity and naturalness separately:** randomly inspect
-   reader matches as well as failures; keep operational errors separate from
-   ambiguous requests. Recheck a representative pilot before any new bulk run.
-7. **Use measured experiments:** compare prompt/payload changes at the same goals,
-   record budget and settings, and retain group-aware splits for paraphrases.
-   Do not claim better downstream performance without a corresponding run.
+1. **Mechanical construction — repaired for new sampling:** schema-first enums,
+   declared numeric bounds, visible-tool membership and value-aware duplicate
+   detection. Clearly overlapping weather/direction no-call topics were removed;
+   arbitrary custom-catalogue unsupported labels still need independent checking.
+2. **Entities/values — partly improved:** meaningful generic fictional pools replace
+   status words as names/places; full visible mappings are preserved. Automatic
+   grounded world generation and human-source imports are not implemented.
+3. **Dependency semantics — awaiting a user decision:** typed field references do
+   not fit the frozen XML consumer; numeric symbolic references are also blocked
+   by its scalar grammar. Grounded scalar-result lookup chains could retain the
+   legacy interface; richer references require a new consumer/format. Do not drop
+   chaining or silently project fields into whole-result tokens to claim success.
+4. **Readable intent payload — implemented:** actual string briefs, quoted typed
+   values, generic field humanization, full context and one-pass templates. This
+   does not establish that one text format universally beats JSON.
+5. **Conditional diversity review — reporting implemented:** distributions remain
+   descriptive, not quotas. Broader naturalness/generalization needs real-data
+   review and controlled experiments, not a fixed preferred prose style.
+6. **Reader recovery/triage — implemented and bounded-live checked below:** keep
+   ambiguity and operational errors separate from bad-source claims; inspect
+   matches as well as failures. No judge is assumed infallible.
+7. **Downstream experiments — still proposed:** preserve group-aware splits and
+   compare improvements at fixed goals before any scale-up/training claim.
+
+## Reader/writer repair validation
+
+### Root cause and contract change
+
+The old flat-argument reader still dropped explicit optional fields after generic
+re-reading. Two focused source-literal-inventory prompts also failed: they did not
+recover either the sample collection/completion dates or the alert limit.
+The missing values were present in the actual transmitted request and schemas;
+raw model output omitted them without hitting its token limit.
+
+Those failures used Wafer routing. A successful five-call example used another
+provider. Wafer's observed alphabetical output ordering was consistent with an
+optional-key/decoding interaction, but this is not proof about the provider's
+implementation. Pinning a provider was not needed for the smaller repair:
+
+- All declared argument slots are now required on the reader wire.
+- A requested value is a closed `{value: ...}` object; an unrequested optional is
+  the closed empty object `{}`. Required arguments cannot use the empty branch.
+- There are no contradictory presence booleans or a null omission sentinel.
+- Canonical calls are reconstructed and checked against the full original schema.
+  Neither the slot envelope nor reader retry machinery enters SFT targets.
+
+Both previously failing cases then recovered their optional values in fresh Wafer
+calls with the same source request/catalogue/model/temperature. General literal
+inventory machinery was not retained after its negative result.
+
+### Actual bounded runs (not cached baseline inference)
+
+| Path under ignored `runs/` | What actually ran and was observed |
+| --- | --- |
+| `verification-fixes-smoke-v1/reader` | Initial flat contract: 6 accepted, 3 unresolved across 9 selected cases; two unresolved cases were clear requests with omitted optional arguments, one genuinely lacked an ID. |
+| `verification-fixes-smoke-v1/literal-evidence-probe` | Two fresh source-only inventory probes; both still omitted fields. |
+| `verification-fixes-smoke-v1/slot-schema-probe` | Two fresh slot-contract probes; both recovered on Wafer. |
+| `verification-fixes-smoke-v1/reader-slots` | Actual CLI with slot contract: all 8 intended-positive cases accepted, including equivalent UTC notation and five calls; the missing-ID control stayed unresolved. 10 fresh requests, zero cache hits. |
+| `readable-writer-smoke-v1/writer` | Three actual temperature-0.9 writer calls using raw readable briefs: scoped alerts/builds, the valid two-date sales pair and a named store. Manual inspection found the supplied values/scopes preserved. |
+| `reader-grounding-controls-v1/reader` | Those 3 new requests, visible name-to-ID mapping and a number-word ID all accepted; 3 negative controls remained unresolved. 11 fresh requests, zero cache hits. |
+| `verification-fixes-smoke-v1/targeted-replay` | Actual `--replay-from` selected only the 3 original unresolved IDs: 2 clear omissions recovered, genuinely missing ID still unresolved. 4 fresh requests, zero cache hits. |
+
+The guard-control negatives include gold coinciding with a schema example and a
+missing required severity. The latter still produced contradictory partial calls
+with ambiguous status; these are retained as reader-contract errors/unresolved,
+not certified and not labeled bad user requests. LLM output errors remain possible.
+
+Fresh responses and usage are retained in each stage's accounted request evidence.
+Together these bounded repair checks cost about one cent; there was no paid bulk
+verification, baseline benchmark rerun or training. The cases deliberately target
+known failure modes and controls, not a random estimate of corpus-wide accuracy.
+
+### Acceptance and uncertainty
+
+- Declared instants compare by actual timezone-aware time, not exact string form.
+  Dates/IDs/names/null omission/array order are not fuzzily normalized.
+- Unfiltered searches with optional filters and unfamiliar literal names are valid.
+- A narrowly declared opaque-ID guard blocks invented schema examples, while mapped
+  IDs and numeric values expressed in words remain supported.
+- Retry feedback uses only public request/schema facts; hidden target values never
+  enter a reader prompt. Operational failures abort rather than triggering opaque
+  retries. Unresolved results are preserved for triage/replay.
+- Offline triage reuses current source audits and equivalence checks, marks old
+  unbound evidence, rejects duplicates, and never manufactures fresh export proofs.
+
+These checks demonstrate the observed fixes, not perfect semantic judging or
+improved downstream model accuracy. Grounded chaining remains the explicit open
+compatibility decision, not a claim hidden behind a higher reader pass rate.
 
 ## Source fingerprints at extraction
 

@@ -498,20 +498,32 @@ class BudgetedClient:
         self,
         request_id: str,
         system: str,
-        payload: dict[str, object],
+        payload: str | dict[str, object],
         schema: dict[str, object],
         temperature: float = 0.7,
         max_tokens: int = MAX_TOKENS_CAP,
     ) -> dict[str, object]:
-        """One budgeted call. Raises ClientError/BudgetError instead of half-succeeding."""
+        """One budgeted call. Raises ClientError/BudgetError instead of half-succeeding.
+
+        A string payload is sent as the literal human-readable user message;
+        a dict payload keeps the legacy compact-JSON user message.
+        """
         if self._closed:
             raise ClientError("client is closed")
         if not isinstance(request_id, str) or not ID_PATTERN.fullmatch(request_id):
             raise ClientError("request_id must be a short file-safe identifier")
         if type(system) is not str or not system.strip():
             raise ClientError("system prompt must be a nonempty string")
-        if not isinstance(payload, dict) or not isinstance(schema, dict):
-            raise ClientError("payload and schema must be JSON objects")
+        if isinstance(payload, str):
+            if not payload.strip():
+                raise ClientError("string payload must be a nonempty message")
+            user_content = payload
+        elif isinstance(payload, dict):
+            user_content = _dump_json(payload)
+        else:
+            raise ClientError("payload must be a readable string or a JSON object")
+        if not isinstance(schema, dict):
+            raise ClientError("schema must be a JSON object")
         if type(temperature) is not float or not 0.0 <= temperature <= 2.0:
             raise ClientError("temperature must be a float between 0 and 2")
         if type(max_tokens) is not int or max_tokens < 1:
@@ -538,7 +550,7 @@ class BudgetedClient:
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system},
-                {"role": "user", "content": _dump_json(payload)},
+                {"role": "user", "content": user_content},
             ],
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -881,7 +893,7 @@ def _parse_output(
         raise ClientError("OpenRouter message was not an object")
     content = message.get("content")
     if not isinstance(content, str) or not content.strip():
-        raise OutputError("empty completion (possible refusal)")
+        raise OutputError("empty model completion (cause unknown)")
     try:
         output = _load_json(content)
     except ClientError as exc:

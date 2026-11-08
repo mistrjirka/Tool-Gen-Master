@@ -32,7 +32,12 @@ from tool_gen.store import (
     finalize_manifest,
     read_done_ids,
 )
-from tool_gen.writer import Completer
+from tool_gen.writer import (
+    Completer,
+    render_context_section,
+    render_goal_needs,
+    render_value,
+)
 
 NUM_PARAPHRASES = 3
 
@@ -50,20 +55,33 @@ def verbalize_operations(goal: GoalRecord) -> list[str]:
     """Render witness calls as plain text with chained refs verbalized."""
     lines: list[str] = []
     for index, call in enumerate(goal.witness):
-        parts: list[str] = []
-        for key, value in call.arguments.items():
-            if isinstance(value, str) and value.startswith("API_call_"):
-                try:
-                    ref = int(value.split("_")[-1]) + 1
-                    parts.append(f"{key}=the result of operation {ref}")
-                except ValueError:
-                    parts.append(f"{key}=the result of an earlier operation")
-            elif isinstance(value, str):
-                parts.append(f"{key}={value}")
-            else:
-                parts.append(f"{key}={value!r}")
+        parts = [
+            f"{key}={render_value(value)}" for key, value in call.arguments.items()
+        ]
         lines.append(f"{index + 1}. {call.name}({', '.join(parts)})")
     return lines
+
+
+def build_paraphrase_brief(goal: GoalRecord, request: str) -> str:
+    """Readable paraphrase brief: original request plus shared goal context.
+
+    Reuses the writer's need/context rendering so both stages see the same
+    goal description; chained tokens are verbalized, never leaked.
+    """
+    needs = render_goal_needs(goal)
+    numbered = "\n".join(f"{i}. {need}" for i, need in enumerate(needs, 1))
+    brief = (
+        "Rewrite the original request below into three versions a real human "
+        "might say, keeping every detail, name, identifier and number exactly.\n\n"
+        f"Original request:\n{request}\n\n"
+        f"What the user already knows:\n{render_context_section(goal)}\n\n"
+        f"What the user wants (for checking nothing is dropped):\n{numbered}"
+    )
+    if "API_call_" in brief:
+        raise ValueError(
+            f"paraphrase brief for goal {goal.id} leaks a hidden reference"
+        )
+    return brief
 
 
 def paraphrase_schema() -> dict[str, object]:
@@ -155,16 +173,30 @@ def run_paraphrase(
 
     try:
         for pos, (goal, request) in enumerate(mine):
-            payload: dict[str, object] = {
-                "original_request": request,
-                "goal_operations": verbalize_operations(goal),
-                "num_paraphrases": NUM_PARAPHRASES,
-            }
+            try:
+                # Render before sending: a hidden-reference leak raises
+                # ValueError here so raw tokens never reach the wire, and
+                # the handler below records it as render failure, not model
+                # refusal.
+                brief = build_paraphrase_brief(goal, request)
+            except ValueError as exc:
+                failed += 1
+                record(
+                    ParaphraseResult(
+                        goal=goal,
+                        original=request,
+                        paraphrases=[],
+                        error=f"input render failed: {exc}",
+                        error_kind="render",
+                    )
+                )
+                processed = pos + 1
+                continue
             try:
                 resp = complete(
                     f"p-{ctx.shard}-{goal.id}",
                     system,
-                    payload,
+                    brief,
                     paraphrase_schema(),
                     0.9,
                     1024,

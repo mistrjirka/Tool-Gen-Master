@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    ValidationError,
+    model_validator,
+)
 
 
 class StrictModel(BaseModel):
@@ -41,9 +48,33 @@ class WriterResult(StrictModel):
     error_kind: str = ""
 
 
+class ReaderAttempt(StrictModel):
+    """One bounded blind attempt: model-declared reading plus its classification.
+
+    ``calls`` carries the parsed actual calls (name + arguments only); legacy
+    ``argument_presence`` flags are dropped at parse time, never synthesized.
+    ``classification`` names the terminal reading of this attempt
+    (``match``/``equivalent``/``different``/``ambiguous``/``status_mismatch``/
+    ``schema_error``/``output_error``/``comparison_error``/``transport``).
+    Immutable once recorded: attempts accumulate, never rewrite.
+    """
+
+    attempt: int = Field(ge=1)
+    request_id: str = Field(min_length=1)
+    status: str = ""
+    reason: str = ""
+    calls: list[ToolCall] = Field(default_factory=list)
+    classification: str = ""
+    error_kind: str = ""
+    detail: str = ""
+
+
 class ReaderResult(StrictModel):
     id: str = Field(min_length=1)
     accepted: bool
+    outcome: Literal["accepted", "unresolved", "invalid_goal"] = "unresolved"
+    comparison: Literal["match", "equivalent", "different"] | None = None
+    attempts: list[ReaderAttempt] = Field(default_factory=list)
     reason: str = ""
     status: str = ""
     witness: list[ToolCall] = Field(default_factory=list)
@@ -51,6 +82,17 @@ class ReaderResult(StrictModel):
     reader_reason: str = ""
     error_kind: str = ""
     source_fingerprint: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _backfill_outcome(cls, data: object) -> object:
+        """Old verdict rows carry no outcome: accepted rows read as accepted."""
+        if isinstance(data, dict) and "outcome" not in data:
+            data = dict(data)
+            data["outcome"] = (
+                "accepted" if data.get("accepted") is True else "unresolved"
+            )
+        return data
 
 
 class ParaphraseResult(StrictModel):

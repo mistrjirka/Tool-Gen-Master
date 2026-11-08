@@ -1,12 +1,18 @@
 """Mechanical goal audit: internal consistency of supplied goals, not reader noise.
 
 Checks every witness call against the tool catalog supplied with that goal:
-unknown tool names, arguments that violate the tool's JSON Schema (bad
-enums/types), and ``API_call_<i>`` forward references (index out of range for
-the calls seen so far). Any tool domain works: the audit never restricts
-goals to a bundled catalog, so generic tool data passes through unchanged.
-A goal that fails here is a generator defect; it must be fixed or dropped
-before writing/reading, never silently attributed to the blind reader.
+unknown or duplicate tool identities, arguments that violate the tool's JSON
+Schema (bad scalar types/enums/ranges checked on the actual argument values),
+and calendar/time semantics via ``comparison.canonical_value``. Name-to-ID
+semantics need live context, so unknown literal names are never classified as
+invalid here.
+
+``API_call_<i>`` legacy references are ungrounded until the user
+dependency-contract decision (legacy whole-result vs typed field refs) lands:
+they are reported explicitly as unsupported/invalid goals (generator-side, never
+reader errors), without disabling generation chaining. A goal that fails here
+is a generator defect; it must be fixed or dropped before writing/reading,
+never silently attributed to the blind reader.
 """
 
 from __future__ import annotations
@@ -16,7 +22,37 @@ from copy import deepcopy
 
 import jsonschema
 
+from tool_gen.comparison import canonical_value
+
 _CHAIN_RE = re.compile(r"^API_call_(\d+)$")
+
+_MISSING: object = object()
+
+
+def _split_refs(value: object, path: str, refs: list[tuple[str, str]]) -> object:
+    """Collect ungrounded legacy refs at any nesting; scrub them from a copy.
+
+    Returns the scrubbed value, or the ``_MISSING`` sentinel when the value
+    itself is a legacy reference (callers omit such entries). Paths read like
+    ``arguments.filter.memberIds[2]``."""
+    if isinstance(value, str) and _CHAIN_RE.fullmatch(value):
+        refs.append((path, value))
+        return _MISSING
+    if isinstance(value, dict):
+        scrubbed: dict[str, object] = {}
+        for key, item in value.items():
+            cleaned = _split_refs(item, f"{path}.{key}", refs)
+            if cleaned is not _MISSING:
+                scrubbed[key] = cleaned
+        return scrubbed
+    if isinstance(value, list):
+        cleaned_items: list[object] = []
+        for index, item in enumerate(value):
+            cleaned = _split_refs(item, f"{path}[{index}]", refs)
+            if cleaned is not _MISSING:
+                cleaned_items.append(cleaned)
+        return cleaned_items
+    return value
 
 
 def audit_goal(goal: dict[str, object]) -> list[str]:
@@ -39,7 +75,26 @@ def audit_goal(goal: dict[str, object]) -> list[str]:
         name = function.get("name")
         parameters = function.get("parameters")
         if isinstance(name, str) and isinstance(parameters, dict):
-            schemas[name] = deepcopy(parameters)
+            try:
+                jsonschema.Draft202012Validator.check_schema(parameters)
+            except jsonschema.SchemaError as exc:
+                problems.append(
+                    f"goal {goal.get('id')}: invalid parameter schema for {name!r}: "
+                    + exc.message
+                )
+                continue
+            if name in schemas:
+                problems.append(
+                    f"goal {goal.get('id')}: duplicate tool identity {name!r}"
+                    + " in supplied catalogue"
+                )
+            else:
+                schemas[name] = deepcopy(parameters)
+        else:
+            problems.append(
+                f"goal {goal.get('id')}: catalog entry lacks a string name"
+                + " or parameter schema"
+            )
     for index, call in enumerate(witness):
         if not isinstance(call, dict):
             problems.append(f"goal {goal.get('id')} call {index}: not an object")
@@ -56,19 +111,15 @@ def audit_goal(goal: dict[str, object]) -> list[str]:
                 f"goal {goal.get('id')} call {index}: arguments not an object"
             )
             continue
-        for value in args.values():
-            if isinstance(value, str):
-                m = _CHAIN_RE.fullmatch(value)
-                if m and int(m.group(1)) >= index:
-                    problems.append(
-                        f"goal {goal.get('id')} call {index}: forward reference {value!r} "
-                        + "to a call that does not precede it"
-                    )
-        checkable = {
-            k: v
-            for k, v in args.items()
-            if not (isinstance(v, str) and _CHAIN_RE.fullmatch(v))
-        }
+        found_refs: list[tuple[str, str]] = []
+        checkable = _split_refs(args, "arguments", found_refs)
+        assert isinstance(checkable, dict)
+        for path, value in found_refs:
+            problems.append(
+                f"goal {goal.get('id')} call {index}: unsupported legacy"
+                + f" reference {value!r} at {path} (dependency contract"
+                + " pending; invalid goal, not a reader error)"
+            )
         try:
             jsonschema.Draft202012Validator(schemas[name]).validate(checkable)
         except jsonschema.ValidationError as exc:
@@ -77,8 +128,21 @@ def audit_goal(goal: dict[str, object]) -> list[str]:
                 f"goal {goal.get('id')} call {index} ({name}): schema violation "
                 + f"at {trail}: {exc.message}"
             )
+            continue
+        try:
+            canonical_value(checkable, schemas[name])
+        except (ValueError, TypeError) as exc:
+            problems.append(
+                f"goal {goal.get('id')} call {index} ({name}): invalid"
+                + f" calendar/time semantics: {exc}"
+            )
     if goal.get("no_call") and witness:
         problems.append(f"goal {goal.get('id')}: no_call goal carries witness calls")
+    if not goal.get("no_call") and not witness:
+        problems.append(
+            f"goal {goal.get('id')}: call goal carries an empty witness;"
+            + " supported no_call=false goals need a nonempty witness"
+        )
     return problems
 
 

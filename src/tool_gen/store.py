@@ -148,6 +148,17 @@ def collect_stage_files(path: Path, filename: str) -> list[Path]:
     raise NoInputFilesError(f"input {path} is neither a file nor a directory")
 
 
+def collect_reader_files(path: Path) -> list[Path]:
+    """Find current per-shard or original results-shardN reader artifacts."""
+    if path.is_file():
+        return [path]
+    if path.is_dir():
+        files = sorted(path.rglob("results*.jsonl"))
+        if files:
+            return files
+    raise NoInputFilesError(f"{path}: no reader result JSONL files found")
+
+
 def read_jsonl_strict(path: Path) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     with open(path, encoding="utf-8") as fh:

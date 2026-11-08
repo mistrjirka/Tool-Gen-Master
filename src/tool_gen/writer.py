@@ -18,13 +18,15 @@ from __future__ import annotations
 
 import json
 import random
+import re
+from string import Template
 from typing import Literal, Protocol
 
 from pydantic import ValidationError
 
 from tool_gen.client import BudgetError, ClientError, OutputError
 from tool_gen.models import GoalRecord, StrictModel, WriterResult, normalize_goal_record
-from tool_gen.prompts import writer_prompt
+from tool_gen.prompts import load_prompt, writer_prompt
 from tool_gen.store import (
     AbortError,
     StageContext,
@@ -39,26 +41,26 @@ MAX_ATTEMPTS = 3
 TERSE_WORDS = 5
 
 UNSUP_TOPICS = [
-    "What is the weather forecast for Tokyo tomorrow",
     "Translate this paragraph to Japanese",
-    "Book a hotel in Paris for next weekend",
     "What is the current price of Ethereum",
     "Send a notification to all subscribers",
     "Calculate the mortgage payment for a 30-year loan",
     "Find the nearest pharmacy to my location",
-    "Summarize the latest news about climate change",
-    "Get directions to the airport from downtown",
     "What are the reviews for this restaurant",
     "How do I reset my password",
     "What is the capital of Australia",
     "Convert 100 USD to EUR",
-    "Find flights from New York to London",
     "What is the population of Tokyo",
     "How to bake a chocolate cake",
     "What is the stock price of Tesla",
     "Translate hello to Spanish",
     "Find the nearest hospital",
-    "What is the weather in London today",
+    "Delete my account and erase all associated data",
+    "Rename every file in my downloads folder to include today's date",
+    "Remind me to call my dentist tomorrow at 9am",
+    "How do I change the oil in my car",
+    "What did the president say in yesterday's speech",
+    "What is the best way to remove a red wine stain from wool",
 ]
 
 _VERBS = [
@@ -84,7 +86,7 @@ class Completer(Protocol):
         self,
         request_id: str,
         system: str,
-        payload: dict[str, object],
+        payload: str | dict[str, object],
         schema: dict[str, object],
         temperature: float,
         max_tokens: int,
@@ -102,23 +104,47 @@ class WriterRejected(Exception):
 
 
 def _natural_key(key: str) -> str:
-    return (
-        key.replace("Id", " ID")
-        .replace("Code", " code")
-        .replace("On", " on")
-        .replace("After", " after")
-        .replace("_", " ")
+    """Generic camelCase/snake_case humanization; values stay verbatim."""
+    spaced = (
+        re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", key).replace("_", " ").replace("-", " ")
     )
+    words = spaced.split()
+    fixed: list[str] = []
+    for word in words:
+        if word.upper() in ("ID", "IDs"):
+            fixed.append(word.upper())
+        else:
+            fixed.append(word.lower())
+    return " ".join(fixed)
 
 
-def _display_value(value: object) -> str:
-    if isinstance(value, str) and value.startswith("API_call_"):
-        try:
-            return f"the value returned by operation {int(value.split('_')[-1]) + 1}"
-        except ValueError:
-            return "the value returned by an earlier operation"
+def describe_chained_reference(token: str) -> str:
+    """Verbalize one ``API_call_<i>`` token without leaking the identifier.
+
+    The reference contract is not yet declared, so no response fields are
+    named here.
+    """
+    try:
+        return f"the value returned by operation {int(token.split('_')[-1]) + 1}"
+    except ValueError:
+        return "the value returned by an earlier operation"
+
+
+def render_value(value: object) -> str:
+    """Render one value: chained refs verbalized, strings JSON-quoted.
+
+    Shared by writer and paraphrase briefs. Quoting keeps literal strings
+    unambiguous against numbers/booleans while types are preserved verbatim.
+    """
     if isinstance(value, str):
-        return value
+        if value.startswith("API_call_"):
+            return describe_chained_reference(value)
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, dict):
+        inner = ", ".join(f"{k!s}: {render_value(v)}" for k, v in value.items())
+        return "{" + inner + "}"
+    if isinstance(value, list):
+        return "[" + ", ".join(render_value(v) for v in value) + "]"
     return json.dumps(value, ensure_ascii=False)
 
 
@@ -139,8 +165,7 @@ def build_writer_payload(goal: GoalRecord) -> dict[str, object]:
             .lower()
         )
         parts = [
-            f"{_natural_key(k)} is {_display_value(v)}"
-            for k, v in call.arguments.items()
+            f"{_natural_key(k)} is {render_value(v)}" for k, v in call.arguments.items()
         ]
         info = f"{_verb_prefix(call.name)} {readable}"
         if parts:
@@ -162,8 +187,10 @@ def build_writer_payload(goal: GoalRecord) -> dict[str, object]:
         "known_context": dict(goal.context),
         "desired_information": desired,
     }
-    # Internal invariant on our own construction (not external input).
-    assert "API_call_" not in json.dumps(payload, ensure_ascii=False)
+    # Checked invariant on our own construction (never silently dropped):
+    # a leak here is a renderer bug, so fail loudly before anything is sent.
+    if "API_call_" in json.dumps(payload, ensure_ascii=False):
+        raise ValueError(f"writer payload for goal {goal.id} leaks a hidden reference")
     return payload
 
 
@@ -172,6 +199,61 @@ def _verb_prefix(tool_name: str) -> str:
         if tool_name.lower().startswith(verb.lower()):
             return verb
     return "get"
+
+
+def _readable_need(call_name: str, arguments: dict[str, object]) -> str:
+    """One need in plain words; chained refs verbalized, literals verbatim."""
+    readable = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", call_name).strip().lower()
+    parts = [
+        f"{_natural_key(str(k))} is {render_value(v)}" for k, v in arguments.items()
+    ]
+    info = readable
+    if parts:
+        info += f" where {', '.join(parts)}"
+    return info
+
+
+def render_goal_needs(goal: GoalRecord) -> list[str]:
+    """Shared need lines for writer and paraphrase briefs (no internal tokens)."""
+    if goal.no_call:
+        topic = random.Random(f"unsup:{goal.id}").choice(UNSUP_TOPICS)
+        return [topic]
+    return [_readable_need(call.name, dict(call.arguments)) for call in goal.witness]
+
+
+def render_context_section(goal: GoalRecord) -> str:
+    """Full visible context, verbatim values, one line per entry."""
+    if not goal.context:
+        return "Nothing beyond the needs below."
+    lines: list[str] = []
+    for key in sorted(goal.context):
+        shown = json.dumps(goal.context[key], ensure_ascii=False)
+        lines.append(f"- {key}: {shown}")
+    return "\n".join(lines)
+
+
+def build_writer_brief(goal: GoalRecord) -> str:
+    """Render the readable per-goal brief sent as the actual user message.
+
+    System policy stays in the system prompt; this is data only. The
+    structured :func:`build_writer_payload` remains for local provenance, but
+    the LLM request body carries this text, never compact JSON.
+    """
+    needs = render_goal_needs(goal)
+    numbered = "\n".join(f"{i}. {need}" for i, need in enumerate(needs, 1))
+    template = load_prompt("writer", "brief_template")
+    # One-pass substitution: inserted values are never re-expanded, so a
+    # literal value containing a placeholder never injects template syntax.
+    brief = Template(template).substitute(
+        STYLE=goal.style,
+        CONTEXT_SECTION=render_context_section(goal),
+        NEEDS_SECTION=numbered,
+    )
+    # Checked invariant on our own construction (never silently dropped):
+    # a leak here is a renderer bug, so fail loudly before anything is sent.
+    if "API_call_" in brief:
+        raise ValueError(f"writer brief for goal {goal.id} leaks a hidden reference")
+    return brief
 
 
 def writer_schema() -> dict[str, object]:
@@ -252,11 +334,17 @@ def run_writer(
                 try:
                     # The requested style travels through untouched: no adaptive
                     # forced-terse rewriting. Terse share is measured in stats.
-                    payload = build_writer_payload(goal)
+                    # Structured payload stays available for provenance; the
+                    # wire carries the readable brief as the user message.
+                    # Both builders raise ValueError on a hidden-reference
+                    # leak, so raw tokens never reach the wire; the handler
+                    # below records it honestly instead of as model refusal.
+                    build_writer_payload(goal)
+                    brief = build_writer_brief(goal)
                     resp = complete(
                         f"{request_id}-a{attempt}",
                         system,
-                        payload,
+                        brief,
                         writer_schema(),
                         temperature,
                         2048,
@@ -269,6 +357,13 @@ def run_writer(
                         break
                     validate_request(output.request)
                     request = output.request
+                    break
+                except ValueError as exc:
+                    # Input-render failure is local data handling, never a
+                    # model judgment: record it as such, no retry (retrying
+                    # a deterministic render cannot help).
+                    reason = f"input render failed: {exc}"
+                    error_kind = "render"
                     break
                 except WriterRejected as exc:
                     reason = str(exc)

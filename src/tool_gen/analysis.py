@@ -112,10 +112,10 @@ def _normalize(record: JsonObject, index: int) -> list[Sample]:
     tools = _tools(source.get("tools", source.get("catalog")))
     calls = _calls(source.get("witness", source.get("calls")))
     style = _string(source.get("style"))
-    outcome = _string(record.get("decision"))
+    outcome = _string(record.get("outcome")) or _string(record.get("decision"))
     accepted = record.get("accepted")
-    if isinstance(accepted, bool):
-        outcome = "reader_pass" if accepted else "reader_fail"
+    if outcome is None and isinstance(accepted, bool):
+        outcome = "reader_pass" if accepted else "legacy_reader_unmatched"
     request = _string(record.get("request"))
     messages = record.get("messages")
     if isinstance(messages, list):
@@ -578,6 +578,7 @@ def analyze_records(records: Iterable[JsonObject]) -> dict[str, object]:
         ),
         "notes": [
             "Lists, repeated wording, identifier copying, and uneven tool frequencies can be appropriate.",
+            "Reader unresolved/error outcomes are not evidence that the source request is bad.",
             "List detection uses leading bullet/number markers; checklist prefixes are measured separately, not all prose lists are detected.",
             "Leaf value counts pool identical leaf keys across tools; values are displayed as JSON to retain their types.",
             "Mixing pipeline stages can count the same underlying goal more than once; parent-group sizes expose but do not remove this.",

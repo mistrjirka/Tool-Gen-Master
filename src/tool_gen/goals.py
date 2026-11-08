@@ -1,21 +1,33 @@
 """Seeded goal generator: port of ``gen_bias_fixed_v3.py`` (bias-fixed pilot v4).
 
-Sampling behavior is intentionally preserved verbatim: Zipf(0.8) domain weights
+Sampling behavior intentionally preserves the pilot mixes: Zipf(0.8) domain weights
 over the catalog insertion order, the [1,2,2,3,3,3,4,4,5] call-count mix, the
 [3..8] catalog sizes, the 0.75 family-tool bias, the 0.30 optional-argument rate,
 the 0.15 chaining rate (``API_call_<i>`` placeholders), the 0.30 call shuffle and
-the 0.10 no-call rate. ``tool_weight`` keeps the v3 bias fixes: pure id-lookup
-tools down-weighted to 0.30, zero-required-argument list tools up-weighted to
-1.50, plus the ``near_duplicate`` rejection (fields/limit tweaks and strict
-argument-subset pairs are never emitted twice for the same tool).
+the 0.10 no-call rate. Witness tools are sampled ONLY from the per-goal catalog
+actually supplied with that goal; within that subset the prior relative weights
+(``tool_weight``: pure id-lookup tools 0.30, zero-required-argument list tools
+1.50) and the 0.75 family-tool bias are preserved. IDs/lists remain allowed;
+
+Value sampling obeys the supplied schemas: declared ``enum`` wins over
+id/code heuristics (e.g. ``tariffCode``), numeric arguments honor their declared
+min/max exactly (never clamped into out-of-schema values), and generic
+name/place/keyword strings come from small explicit fictional pools keyed by
+meaning/declared description (exact IDs and legal enums preserved). The
+``near_duplicate`` rejection compares actual shared values: exact duplicate
+calls and same core args differing only in projection/limit are never emitted
+twice for the same tool, while different books/dates/filters (even with the
+same key sets) and general-plus-genuinely-different-filter pairs are allowed.
 
 Known quirks preserved for reproducibility (not misrepresented as fixed):
 - ``group_id`` is ``sha256(str(calls))`` over the Python repr of the call list,
   not over canonical JSON, so it is interpreter-repr-sensitive.
-- Chained ``API_call_<i>`` values are forward-unresolved plain strings; there is
-  no output schema or typed reference behind them. Semantic chaining is NOT
-  solved here. Run ``tool-gen audit`` to surface unknown tools, bad enums/types
-  and forward references as mechanical goal errors, distinct from reader noise.
+- Chained ``API_call_<i>`` values are forward-unresolved plain strings pending
+  the user dependency-contract decision (legacy whole-result vs typed field
+  refs); the reference-selection block is intentionally left as-is and chaining
+  is NOT silently disabled. Run ``tool-gen audit`` to surface them as explicit
+  unsupported/invalid-goal findings, distinct from reader noise. Semantic
+  chaining is NOT solved here.
 - Each sampled argument draws from a freshly generated fixture-id pool, so
   id arguments across calls never co-refer by construction.
 """
@@ -99,6 +111,101 @@ def _schema_float(prop: dict[str, object], key: str, default: float) -> float:
     return float(value)
 
 
+def _schema_range_int(prop: dict[str, object]) -> tuple[int, int]:
+    """Declared integer bounds exactly; a min>max schema is a catalog defect."""
+    lo = _schema_int(prop, "minimum", 0) if "minimum" in prop else 0
+    hi = _schema_int(prop, "maximum", 100) if "maximum" in prop else 100
+    if lo > hi:
+        raise ValueError(f"schema range invalid: minimum {lo} > maximum {hi}")
+    return lo, hi
+
+
+def _schema_range_float(prop: dict[str, object]) -> tuple[float, float]:
+    """Declared number bounds exactly; a min>max schema is a catalog defect."""
+    lo = _schema_float(prop, "minimum", 0.0) if "minimum" in prop else 0.0
+    hi = _schema_float(prop, "maximum", 100.0) if "maximum" in prop else 100.0
+    if lo > hi:
+        raise ValueError(f"schema range invalid: minimum {lo} > maximum {hi}")
+    return lo, hi
+
+
+PERSON_NAMES = [
+    "Amara Okafor",
+    "Jonas Lindqvist",
+    "Priya Raman",
+    "Tomas Herrera",
+    "Nadia Haddad",
+    "Elias Novak",
+    "Mei Tanaka",
+    "Sara Lindgren",
+]
+
+PLACES = [
+    "Riverside Market",
+    "Northgate Library",
+    "Harborview Station",
+    "Cedar Park",
+    "Lakeside Pavilion",
+    "Old Mill District",
+]
+
+KEYWORDS = [
+    "harbor tides",
+    "solar lanterns",
+    "city bees",
+    "quiet gardens",
+    "river maps",
+    "night trains",
+]
+
+BRANCHES = [
+    "main",
+    "north-branch",
+    "release-2x",
+    "feature-harbor",
+]
+
+NEUTRAL_TEXTS = [
+    "harbor record",
+    "general entry",
+    "reference note",
+    "sample item",
+]
+
+_PERSON_KEYS = (
+    "author",
+    "username",
+    "guest",
+    "student",
+    "borrower",
+    "customer",
+    "contact",
+    "person",
+    "member",
+)
+_PLACE_KEYS = ("city", "origin", "destination", "location", "place", "store")
+_KEYWORD_KEYS = ("keyword", "query", "title", "subject", "product", "name")
+
+
+def _semantic_string(rng: random.Random, param_name: str, description: str) -> object:
+    """Fictional value keyed by parameter meaning/declared description."""
+    pname = param_name.lower()
+    desc = description.lower()
+    if "branch" in pname:
+        return rng.choice(BRANCHES)
+    if any(k in pname for k in _PERSON_KEYS) or any(
+        k in desc for k in ("username", "display name", "guest name", "student")
+    ):
+        return rng.choice(PERSON_NAMES)
+    if any(k in pname for k in _PLACE_KEYS) or any(
+        k in desc for k in ("location name", "city name", "store display name")
+    ):
+        return rng.choice(PLACES)
+    if any(k in pname for k in _KEYWORD_KEYS) or "keyword" in desc:
+        return rng.choice(KEYWORDS)
+    return rng.choice(NEUTRAL_TEXTS)
+
+
 def sample_value(
     rng: random.Random,
     prop: dict[str, object],
@@ -106,32 +213,45 @@ def sample_value(
     fixture_ids: list[str] | None = None,
 ) -> object:
     ptype = str(prop.get("type", "string"))
-    desc = str(prop.get("description", "")).lower()
+    raw_desc = str(prop.get("description", ""))
+    desc = raw_desc.lower()
     pname = param_name.lower()
-    if "id" in pname or "code" in pname or "sku" in pname:
-        if ptype == "integer":
-            lo_id = _schema_int(prop, "minimum", 1)
-            hi_id = min(_schema_int(prop, "maximum", 999), 999)
-            return rng.randint(lo_id, max(lo_id, hi_id))
-        if fixture_ids:
-            return rng.choice(fixture_ids)
-        return random_id(rng)
-    if pname == "limit":
-        return rng.choice([5, 10, 20, 50])
     if "enum" in prop:
         enum = prop["enum"]
         assert isinstance(enum, list) and enum
         return rng.choice(enum)
+    if "id" in pname or "code" in pname or "sku" in pname:
+        if ptype == "integer":
+            lo_id = _schema_int(prop, "minimum", 1) if "minimum" in prop else 1
+            hi_id = _schema_int(prop, "maximum", 999) if "maximum" in prop else 999
+            if lo_id > hi_id:
+                raise ValueError(
+                    f"schema range invalid: minimum {lo_id} > maximum {hi_id}"
+                )
+            return rng.randint(lo_id, hi_id)
+        if fixture_ids:
+            return rng.choice(fixture_ids)
+        return random_id(rng)
+    if pname == "limit":
+        lo_lim = _schema_int(prop, "minimum", 0) if "minimum" in prop else 0
+        hi_lim = _schema_int(prop, "maximum", 50) if "maximum" in prop else 50
+        if lo_lim > hi_lim:
+            raise ValueError(
+                f"schema range invalid: minimum {lo_lim} > maximum {hi_lim}"
+            )
+        fitting = [v for v in (5, 10, 20, 50) if lo_lim <= v <= hi_lim]
+        if fitting:
+            return rng.choice(fitting)
+        return rng.randint(lo_lim, hi_lim)
     if ptype == "integer":
-        mn_int = _schema_int(prop, "minimum", 0)
-        mx_int = min(_schema_int(prop, "maximum", 100), 100)
-        if mn_int > mx_int:
-            mn_int = 0
+        mn_int, mx_int = _schema_range_int(prop)
         return rng.randint(mn_int, mx_int)
     if ptype == "number":
-        lo_num = _schema_float(prop, "minimum", 0.0)
-        hi_num = min(_schema_float(prop, "maximum", 100.0), 100.0)
-        return round(rng.uniform(lo_num, hi_num), 2)
+        lo_num, hi_num = _schema_range_float(prop)
+        sampled = round(rng.uniform(lo_num, hi_num), 2)
+        # Rounding to 2dp can escape narrow fractional bounds (e.g. .005-.006),
+        # so clamp the rounded result back into the declared bounds.
+        return max(lo_num, min(hi_num, sampled))
     if ptype == "boolean":
         return rng.choice([True, False])
     if ptype == "string":
@@ -142,27 +262,31 @@ def sample_value(
                 return f"{d}T{t}:00+02:00"
             return d
         if "one of" in desc:
-            m = re.search(r"one of: (.+)", str(prop.get("description", "")))
+            m = re.search(r"one of: (.+)", raw_desc)
             if m:
                 return rng.choice([v.strip() for v in m.group(1).split(",")])
-        return rng.choice(
-            ["active", "pending", "sample", "main", "test", "open", "closed"]
-        )
+        return _semantic_string(rng, param_name, raw_desc)
     return None
 
 
 def near_duplicate(
     calls: list[dict[str, object]], name: str, args: dict[str, object]
 ) -> bool:
+    """Reject equal cores differing only in projection/limit. The argument
+    dicts are compared with ``fields``/``limit`` removed on BOTH sides, so
+    differing projection/limit values alone never distinguish calls; exact
+    duplicates are covered. Different dates/IDs/filter values and
+    unfiltered-plus-genuinely-filtered pairs remain allowed."""
     for c in calls:
         if c["name"] != name:
             continue
         existing = c["arguments"]
         assert isinstance(existing, dict)
-        ka, kb = set(existing), set(args)
-        if ka ^ kb and (ka ^ kb) <= OPTIONAL_TWEAKABLE:
-            return True
-        if ka <= kb or kb <= ka:
+        core_existing = {
+            k: v for k, v in existing.items() if k not in OPTIONAL_TWEAKABLE
+        }
+        core_args = {k: v for k, v in args.items() if k not in OPTIONAL_TWEAKABLE}
+        if core_existing == core_args:
             return True
     return False
 
@@ -190,7 +314,6 @@ def gen_goals(n: int, seed: int) -> list[dict[str, object]]:
     for i in range(n):
         family = rng.choices(families, weights=DOMAIN_WEIGHTS, k=1)[0]
         tools = list(by_family[family])
-        weights = [tool_weight(t) for t in tools]
         call_count = rng.choice(CALL_COUNT_CHOICES)
         catalog_size = rng.choice(CATALOG_SIZE_CHOICES)
         if catalog_size <= len(tools):
@@ -206,14 +329,24 @@ def gen_goals(n: int, seed: int) -> list[dict[str, object]]:
 
         calls: list[dict[str, object]] = []
         seen: set[tuple[str, str]] = set()
+        family_names = {str(_function_of(t)["name"]) for t in tools}
+        family_in_catalog = [
+            t for t in catalog_tools if str(_function_of(t)["name"]) in family_names
+        ]
         for _ in range(call_count * 6):
             if len(calls) >= call_count:
                 break
-            tool = (
-                rng.choices(tools, weights=weights, k=1)[0]
-                if rng.random() < FAMILY_TOOL_BIAS
-                else rng.choice(catalog_tools)
-            )
+            # Supported witness tools come only from the supplied catalog;
+            # the family bias picks among family members within that catalog,
+            # keeping the prior relative weights.
+            if rng.random() < FAMILY_TOOL_BIAS and family_in_catalog:
+                tool = rng.choices(
+                    family_in_catalog,
+                    weights=[tool_weight(t) for t in family_in_catalog],
+                    k=1,
+                )[0]
+            else:
+                tool = rng.choice(catalog_tools)
             function = _function_of(tool)
             parameters = function["parameters"]
             assert isinstance(parameters, dict)

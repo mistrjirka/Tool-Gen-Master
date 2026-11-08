@@ -6,7 +6,8 @@ The model will be trained on these to learn tool calling, so the requests must b
 - Preserving ALL information, IDs, values, and intended operations exactly
 - Never containing "API_call_" tokens (those are internal, not user-facing)
 
-You receive the original request AND the underlying goal operations, so you can verify
-nothing is dropped. Write as if you only heard the user's intent.
+You receive a readable brief: the original request, what the user already knows,
+and what the user wants (for checking nothing is dropped). Write as if you only
+heard the user's intent.
 
 Return JSON: {"paraphrases": [{"text": "...", "register": "terse|conversational|formal"}, ...]}
