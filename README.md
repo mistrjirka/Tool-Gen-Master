@@ -28,8 +28,9 @@ need no credentials. Raw data, run evidence and `.env` files are Git-ignored.
 
 ```text
 src/tool_gen/
-  goals.py                  seeded goal sampling
-  writer.py / paraphrase.py readable briefs and request generation
+  goals.py                  seeded structural sampling / legacy fixed goals
+  creation.py / quality.py semantic creator and separate quality judge
+  writer.py / paraphrase.py readable briefs for fixed goals and request generation
   reader.py                 blind interpretation and bounded recovery
   comparison.py             schema-aware call equivalence
   triage.py / analysis.py   failure diagnosis and descriptive patterns
@@ -37,11 +38,57 @@ src/tool_gen/
   store.py / client.py      provenance, JSONL, accounting and API transport
   cli.py                    command-line interface
   catalogs/data/            16 domains / 64 tools, one JSON per domain
-  prompts/                  separate writer/, reader/, paraphraser/ Markdown
+  prompts/                  packaged creation/, quality/, writer/, reader/, paraphraser/
 docs/                       original audit, repair evidence and measurement guide
 ```
 
-## Commands
+## Semantic creation (preferred for new human-like candidates)
+
+```sh
+tool-gen create -n 15 --seed 426 --out runs/semantic --max-usd 0.50
+# Optional later blind reconstruction; it is not the semantic quality judge.
+tool-gen reader --input runs/semantic --out runs/semantic-reader
+```
+
+The program samples an allowed catalogue, call count and schema-derived argument
+shapes. It discards the old draft's sampled values and chosen calls. A model then
+chooses a new useful goal, fictional values, independent calls and natural request.
+There are no manually written production scenarios or per-domain story templates.
+
+```text
+catalogue + structural controls -> creator -> hard validation -> quality judge
+                                      ^                            |
+                                      +--- bounded new candidate --+ problem
+                                                                  |
+                                                     accepted / unresolved
+```
+
+The separate judge evaluates the whole item and each operation's information
+gain/value roles. It sees the candidate goal deliberately; it is not a blind
+reader. Known-only projections are warnings to assess, not a universal ID ban.
+Independent batches remain allowed. Limits do not imply sorting; assistant
+reasoning over retrieved data does not require a dedicated analytics tool.
+
+One capped ledger covers creator (0.9) and judge (0.0) requests per shard.
+`--max-attempts 2` bounds recovery; judge output errors re-judge the retained
+candidate, quality problems can generate a new one, uncertainty stays unresolved.
+Operational errors abort with evidence and leave later inputs unwritten.
+
+Each shard contains immutable `specs.jsonl`, canonical `creation.jsonl` with all
+attempts/assessments, and an atomically derived accepted-only `results.jsonl`
+compatible with existing export/reader/paraphrase commands. IDs/splits/group hashes
+are server-owned. Changed specs/prompts/config refuse resume; accepted rows are
+not regenerated on a no-op resume. The judge is fallible: see the
+[15-item semantic pilot and manual corrections](docs/semantic-creation-pilot-15.md).
+
+Quality acceptance is **not reader verification**. Export without reader proofs
+retains `verification: none`; it never fabricates a blind-reader proof.
+
+## Fixed-goal and verification commands
+
+The existing `goals` + `writer` path remains available for reproducible mechanical
+sampling or supplied, already-bound goals. It does not gain semantic value
+creation merely because the writer rephrases it.
 
 ```sh
 # Offline goal sampling and mechanical audit. Inspect audit problems before API spend.

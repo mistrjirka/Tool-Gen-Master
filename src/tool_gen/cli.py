@@ -65,6 +65,72 @@ def cmd_goals(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_create(args: argparse.Namespace) -> int:
+    """Create new targets semantically; never reinterpret existing fixed goals."""
+    from tool_gen.creation import creation_prompt, run_creation, sample_specs
+    from tool_gen.quality import quality_prompt
+
+    validate_shard_args(args.shard, args.shards)
+    if args.num < 1 or args.max_attempts < 1:
+        raise StageError("--num and --max-attempts must be at least 1")
+    specs = sample_specs(args.num, args.seed)
+    ensure_unique_ids([spec.id for spec in specs], "creation specifications")
+    shard_dir = _shard_dir(Path(args.out), args.shard)
+    model = args.model or DEFAULT_MODEL
+    max_usd = _cap(args.max_usd)
+    with BudgetedClient(str(shard_dir), max_usd=max_usd, model=model) as client:
+        # The existing client lock owns this shard, including the immutable
+        # input snapshot. Atomic publication survives an interrupted first run.
+        source_path = shard_dir / "specs.jsonl"
+        content = "".join(
+            strict_dumps(spec.model_dump(mode="json")) + "\n" for spec in specs
+        )
+        if source_path.exists():
+            if source_path.read_text(encoding="utf-8") != content:
+                raise StageError("creation specs changed; use a fresh output root")
+        else:
+            temporary = source_path.with_suffix(".tmp")
+            temporary.write_text(content, encoding="utf-8")
+            temporary.replace(source_path)
+        ctx = StageContext(
+            stage="creation",
+            shard_dir=shard_dir,
+            shard=args.shard,
+            shards=args.shards,
+            prompt_text=creation_prompt() + "\n\n" + quality_prompt(),
+            config={
+                "model": model,
+                "temperature": str(args.temperature),
+                "judge_temperature": "0.0",
+                "max_usd": max_usd if max_usd is not None else "none",
+                "num": str(args.num),
+                "seed": str(args.seed),
+                "max_attempts": str(args.max_attempts),
+                "contract": "semantic-creation-v1",
+                "quality_contract": "quality-operations-v2",
+            },
+            inputs=_input_files([source_path]),
+        )
+        try:
+            stats = run_creation(
+                specs,
+                ctx,
+                client.complete,
+                temperature=args.temperature,
+                max_attempts=args.max_attempts,
+            )
+        except AbortError as exc:
+            print(
+                f"creation aborted after {exc.processed} items: {exc}", file=sys.stderr
+            )
+            print(strict_dumps({"accounting": client.accounting()}))
+            return 2
+        summary: dict[str, object] = dict(client.accounting())
+        summary.update(stats)
+        print(strict_dumps(summary))
+    return 0
+
+
 def cmd_audit(args: argparse.Namespace) -> int:
     from tool_gen.validate import audit_goals
 
@@ -403,6 +469,18 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--seed", type=int, default=21)
     g.add_argument("-o", "--output", default="goals.jsonl")
     g.set_defaults(func=cmd_goals)
+
+    c = sub.add_parser(
+        "create",
+        help="create new semantic goals/requests with a separate quality judge",
+    )
+    c.add_argument("-n", "--num", type=int, default=15)
+    c.add_argument("--seed", type=int, default=21)
+    c.add_argument("--out", required=True, help="stage root; outputs live in shard-N")
+    c.add_argument("--temperature", type=float, default=0.9)
+    c.add_argument("--max-attempts", type=int, default=2)
+    _add_stage_args(c)
+    c.set_defaults(func=cmd_create)
 
     a = sub.add_parser(
         "audit", help="mechanical goal audit (unknown tools, bad args, forward refs)"
