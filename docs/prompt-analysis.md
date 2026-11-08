@@ -116,8 +116,8 @@ bullet count or length does not.
 
 ### 6. Chaining has an unresolved contract mismatch
 
-The sampler replaces an arbitrary argument with `API_call_N`, independently of
-what the preceding tool returns. It can then shuffle calls without remapping the
+The legacy sampler replaced an arbitrary argument with `API_call_N`, independently of
+what the preceding tool returns. It could then shuffle calls without remapping the
 indices. There are no declared output schemas or field selectors behind these
 references. The writer converts the token to “the value returned by operation N”,
 which hides the implementation token but does not make the dependency feasible.
@@ -128,10 +128,11 @@ A reader can therefore object to an intended chain even when its prose is
 understandable. Conversely, a writer can invent a dependency in an otherwise
 independent goal and still obtain a matching call list.
 
-Do not infer that all chains are bad or remove them merely to improve acceptance.
-They need grounded outputs, typed reference paths and reference-safe ordering.
-The migrated sampler retains this experimental behavior for reproducibility and
-does not claim that semantic chaining has been solved.
+Current behavior: default generation emits independent calls only (placeholder
+injection removed for this phase); imported legacy goals carrying `API_call_N`
+are still quarantined as invalid goals by `tool-gen audit`, not as reader errors.
+Grounded chaining needs declared outputs, typed reference paths and
+reference-safe ordering, which remain undecided and out of scope here.
 
 ### 7. Some goals request tools absent from their own catalogue
 
@@ -274,8 +275,11 @@ known failure modes and controls, not a random estimate of corpus-wide accuracy.
   unbound evidence, rejects duplicates, and never manufactures fresh export proofs.
 
 These checks demonstrate the observed fixes, not perfect semantic judging or
-improved downstream model accuracy. Grounded chaining remains the explicit open
-compatibility decision, not a claim hidden behind a higher reader pass rate.
+improved downstream model accuracy. Grounded chaining is deferred while independent behavior is established, not
+silently claimed from a higher reader pass rate. A subsequent fresh end-to-end
+[15-goal independent pilot](independent-pilot-15.md) exercises the repaired nested
+sampling, ordered windows and default non-chaining generation, with all failures
+retained and separately inspected.
 
 ## Source fingerprints at extraction
 

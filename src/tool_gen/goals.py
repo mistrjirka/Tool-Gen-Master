@@ -2,14 +2,21 @@
 
 Sampling behavior intentionally preserves the pilot mixes: Zipf(0.8) domain weights
 over the catalog insertion order, the [1,2,2,3,3,3,4,4,5] call-count mix, the
-[3..8] catalog sizes, the 0.75 family-tool bias, the 0.30 optional-argument rate,
-the 0.15 chaining rate (``API_call_<i>`` placeholders), the 0.30 call shuffle and
-the 0.10 no-call rate. Witness tools are sampled ONLY from the per-goal catalog
+[3..8] catalog sizes, the 0.75 family-tool bias, the 0.30 optional-argument rate, the 0.30 call shuffle and
+the 0.10 no-call rate. Default sampled goals are independent: the legacy
+``API_call_<i>`` placeholder injection is removed, so new goals never chain by
+construction (imported legacy goals carrying such references are still rejected
+by ``tool-gen audit``). Witness tools are sampled ONLY from the per-goal catalog
 actually supplied with that goal; within that subset the prior relative weights
 (``tool_weight``: pure id-lookup tools 0.30, zero-required-argument list tools
 1.50) and the 0.75 family-tool bias are preserved. IDs/lists remain allowed;
 
-Value sampling obeys the supplied schemas: declared ``enum`` wins over
+Value sampling obeys the supplied schemas and recurses into bundled
+array/object arguments: projection arrays sample a unique subset of the
+declared enum items within min/maxItems, and nested filter objects sample
+their required properties always and a varying subset of optional ones
+(``searchBooks.filter`` author/genre/year each drawn from its own schema).
+Declared ``enum`` wins over
 id/code heuristics (e.g. ``tariffCode``), numeric arguments honor their declared
 min/max exactly (never clamped into out-of-schema values), and generic
 name/place/keyword strings come from small explicit fictional pools keyed by
@@ -22,14 +29,10 @@ same key sets) and general-plus-genuinely-different-filter pairs are allowed.
 Known quirks preserved for reproducibility (not misrepresented as fixed):
 - ``group_id`` is ``sha256(str(calls))`` over the Python repr of the call list,
   not over canonical JSON, so it is interpreter-repr-sensitive.
-- Chained ``API_call_<i>`` values are forward-unresolved plain strings pending
-  the user dependency-contract decision (legacy whole-result vs typed field
-  refs); the reference-selection block is intentionally left as-is and chaining
-  is NOT silently disabled. Run ``tool-gen audit`` to surface them as explicit
-  unsupported/invalid-goal findings, distinct from reader noise. Semantic
-  chaining is NOT solved here.
 - Each sampled argument draws from a freshly generated fixture-id pool, so
   id arguments across calls never co-refer by construction.
+- ``listReadings`` windows are sampled end-to-end (fromInstant <= toInstant,
+  inclusive); an imported goal with a reversed window is an invalid goal.
 """
 
 from __future__ import annotations
@@ -57,7 +60,7 @@ STYLES = [
 CONTEXT_MODES = ["api_only", "grounded"]
 FAMILY_TOOL_BIAS = 0.75
 OPTIONAL_RATE = 0.3
-CHAIN_RATE = 0.15
+NESTED_OPTIONAL_RATE = 0.5
 SHUFFLE_RATE = 0.30
 NO_CALL_RATE = 0.10
 
@@ -206,6 +209,10 @@ def _semantic_string(rng: random.Random, param_name: str, description: str) -> o
     return rng.choice(NEUTRAL_TEXTS)
 
 
+def json_key(value: object) -> str:
+    return json.dumps(value, sort_keys=True, ensure_ascii=False)
+
+
 def sample_value(
     rng: random.Random,
     prop: dict[str, object],
@@ -266,7 +273,83 @@ def sample_value(
             if m:
                 return rng.choice([v.strip() for v in m.group(1).split(",")])
         return _semantic_string(rng, param_name, raw_desc)
-    return None
+    if ptype == "array":
+        items = prop.get("items", {})
+        if not isinstance(items, dict):
+            raise TypeError(
+                f"array schema for {param_name!r} has non-object items: {items!r}"
+            )
+        min_items = _schema_int(prop, "minItems", 1) if "minItems" in prop else 1
+        max_items = _schema_int(prop, "maxItems", 6) if "maxItems" in prop else 6
+        if min_items < 0 or max_items < 0:
+            raise ValueError(
+                f"array schema for {param_name!r} has negative item bounds"
+            )
+        if min_items > max_items:
+            raise ValueError(
+                f"schema range invalid: minItems {min_items} > maxItems {max_items}"
+            )
+        item_enum = items.get("enum")
+        if isinstance(item_enum, list) and item_enum:
+            if min_items > len(item_enum):
+                raise ValueError(
+                    f"array schema for {param_name!r} needs {min_items} unique"
+                    f" items from {len(item_enum)} enum values"
+                )
+            count = rng.randint(min_items, min(max_items, len(item_enum)))
+            return rng.sample(list(item_enum), count)
+        count = rng.randint(min_items, max_items)
+        items_sampled: list[object] = [
+            sample_value(rng, items, param_name, fixture_ids) for _ in range(count)
+        ]
+        if prop.get("uniqueItems") is True:
+            for index in range(len(items_sampled)):
+                for _ in range(10):
+                    if json_key(items_sampled[index]) not in {
+                        json_key(v) for j, v in enumerate(items_sampled) if j != index
+                    }:
+                        break
+                    items_sampled[index] = sample_value(
+                        rng, items, param_name, fixture_ids
+                    )
+            if len({json_key(value) for value in items_sampled}) != len(items_sampled):
+                raise ValueError(
+                    f"cannot sample {count} unique array items for {param_name!r}"
+                )
+        return items_sampled
+    if ptype == "object":
+        properties = prop.get("properties", {})
+        if not isinstance(properties, dict):
+            raise TypeError(
+                f"object schema for {param_name!r} has non-object properties"
+            )
+        required = prop.get("required", [])
+        if not isinstance(required, list):
+            raise TypeError(f"object schema for {param_name!r} has non-list required")
+        sampled_obj: dict[str, object] = {}
+        for key in required:
+            child = properties.get(str(key))
+            if not isinstance(child, dict):
+                raise TypeError(
+                    f"object schema for {param_name!r} requires"
+                    f" undeclared property {key!r}"
+                )
+            sampled_obj[str(key)] = sample_value(rng, child, str(key), fixture_ids)
+        optional_keys = [
+            k for k in properties if k not in required and isinstance(k, str)
+        ]
+        for key in optional_keys:
+            if rng.random() < NESTED_OPTIONAL_RATE:
+                child = properties[key]
+                assert isinstance(child, dict)
+                sampled_obj[str(key)] = sample_value(rng, child, str(key), fixture_ids)
+        if not sampled_obj and optional_keys:
+            key = rng.choice(optional_keys)
+            child = properties[key]
+            assert isinstance(child, dict)
+            sampled_obj[str(key)] = sample_value(rng, child, str(key), fixture_ids)
+        return sampled_obj
+    raise TypeError(f"unsupported schema type {ptype!r} for {param_name!r}: {prop!r}")
 
 
 def near_duplicate(
@@ -295,6 +378,21 @@ def _function_of(tool: Tool) -> dict[str, object]:
     function = tool["function"]
     assert isinstance(function, dict)
     return function
+
+
+def _order_readings_window(args: dict[str, object]) -> None:
+    """Order this tool's declared instant window in place, start inclusive.
+
+    Only the declared ``listReadings`` fromInstant/toInstant contract is
+    handled here; no generic key-guessing over unrelated tools."""
+    start = args.get("fromInstant")
+    end = args.get("toInstant")
+    if not isinstance(start, str) or not isinstance(end, str):
+        return
+    from tool_gen.comparison import canonical_instant
+
+    if canonical_instant(start) > canonical_instant(end):
+        args["fromInstant"], args["toInstant"] = end, start
 
 
 def gen_goals(n: int, seed: int) -> list[dict[str, object]]:
@@ -359,11 +457,9 @@ def gen_goals(n: int, seed: int) -> list[dict[str, object]]:
                 if key in props:
                     prop = props[key]
                     assert isinstance(prop, dict)
-                    val = sample_value(
+                    args[str(key)] = sample_value(
                         rng, prop, str(key), [random_id(rng) for _ in range(5)]
                     )
-                    if val is not None:
-                        args[str(key)] = val
             for key in props:
                 if (
                     key not in required
@@ -372,14 +468,12 @@ def gen_goals(n: int, seed: int) -> list[dict[str, object]]:
                 ):
                     prop = props[key]
                     assert isinstance(prop, dict)
-                    val = sample_value(
+                    args[str(key)] = sample_value(
                         rng, prop, str(key), [random_id(rng) for _ in range(5)]
                     )
-                    if val is not None:
-                        args[str(key)] = val
-            if calls and args and rng.random() < CHAIN_RATE:
-                args[rng.choice(list(args))] = f"API_call_{rng.randrange(len(calls))}"
             name = str(function["name"])
+            if name == "listReadings":
+                _order_readings_window(args)
             if near_duplicate(calls, name, args):
                 continue
             sig = (name, json.dumps(args, sort_keys=True))
@@ -390,7 +484,7 @@ def gen_goals(n: int, seed: int) -> list[dict[str, object]]:
         if rng.random() < SHUFFLE_RATE and len(calls) > 1:
             rng.shuffle(calls)
 
-        no_call = rng.random() < NO_CALL_RATE
+        no_call = rng.random() < NO_CALL_RATE or not calls
         goals.append(
             {
                 "id": f"cohv5-{seed}-{i:04d}",

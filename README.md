@@ -5,10 +5,11 @@ pipeline samples goals, writes human-like requests, independently interprets
 them, and exports SFT records. Descriptive reports reveal patterns without
 turning every bias into a defect.
 
-**Chaining decision still pending:** the legacy sampler's `API_call_N` references
-are not grounded in declared outputs. They are flagged as invalid goals and are
-not certified by the reader. Fixing them requires choosing a reference contract
-compatible with the intended training consumer; see [prompt analysis](docs/prompt-analysis.md).
+**Independent calls by default:** the sampler emits independent calls only; the
+legacy `API_call_N` placeholder injection is removed. Imported legacy goals that
+still carry such references are not grounded in declared outputs: they are
+flagged as invalid goals and are not certified by the reader. Choosing a future
+reference contract remains out of scope; see [prompt analysis](docs/prompt-analysis.md).
 Do not treat this as authorization to start bulk generation or training.
 
 ## Install
@@ -184,8 +185,9 @@ or reader-unresolved rows are skipped with counts; stale proofs abort.
 
 The initial migration (`64590b9`) preserved the old sampler. Subsequent repairs
 change seeded outputs intentionally: enum/type/range correctness, visible-tool
-membership, meaningful generic name/place values and value-aware duplicate checks.
-The valid two-date sales example is no longer rejected merely for sharing a tool.
+membership, meaningful generic name/place values, recursive array/object sampling,
+ordered reading windows and value-aware duplicate checks. The valid two-date sales
+example is no longer rejected merely for sharing a tool.
 Same-version seeded runs remain reproducible; cross-version byte parity is not
 promised. Domain/property ordering still affects the random stream.
 
@@ -194,6 +196,7 @@ visible-context support do not turn the sampler into a simulated world. Chaining
 still awaits its explicit contract decision; no broad quality/performance gains
 are claimed from a small reader smoke. No human-source dataset was imported.
 
-See [prompt causes and repair evidence](docs/prompt-analysis.md) and
+See [the fresh 15-goal independent pilot, including all failures](docs/independent-pilot-15.md),
+[prompt causes and repair evidence](docs/prompt-analysis.md) and
 [bias measurements](docs/bias-analysis.md). No bulk generation, training,
 checkpoint promotion or benchmark rerun is implied by these commands.

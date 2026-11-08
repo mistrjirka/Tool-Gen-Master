@@ -22,7 +22,7 @@ from copy import deepcopy
 
 import jsonschema
 
-from tool_gen.comparison import canonical_value
+from tool_gen.comparison import canonical_instant, canonical_value
 
 _CHAIN_RE = re.compile(r"^API_call_(\d+)$")
 
@@ -136,6 +136,25 @@ def audit_goal(goal: dict[str, object]) -> list[str]:
                 f"goal {goal.get('id')} call {index} ({name}): invalid"
                 + f" calendar/time semantics: {exc}"
             )
+            continue
+        if name == "listReadings":
+            start = checkable.get("fromInstant")
+            end = checkable.get("toInstant")
+            if isinstance(start, str) and isinstance(end, str):
+                try:
+                    reversed_window = canonical_instant(start) > canonical_instant(end)
+                except ValueError as exc:
+                    problems.append(
+                        f"goal {goal.get('id')} call {index} ({name}): invalid"
+                        + f" window instant: {exc}"
+                    )
+                    continue
+                if reversed_window:
+                    problems.append(
+                        f"goal {goal.get('id')} call {index} ({name}): window"
+                        + " start fromInstant is after end toInstant"
+                        + " (window is inclusive; invalid goal, not a reader error)"
+                    )
     if goal.get("no_call") and witness:
         problems.append(f"goal {goal.get('id')}: no_call goal carries witness calls")
     if not goal.get("no_call") and not witness:
