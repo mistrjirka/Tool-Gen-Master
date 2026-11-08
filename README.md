@@ -79,7 +79,10 @@ attempts/assessments, and an atomically derived accepted-only `results.jsonl`
 compatible with existing export/reader/paraphrase commands. IDs/splits/group hashes
 are server-owned. Changed specs/prompts/config refuse resume; accepted rows are
 not regenerated on a no-op resume. The judge is fallible: see the
-[15-item semantic pilot and manual corrections](docs/semantic-creation-pilot-15.md).
+[15-item semantic pilot and manual corrections](docs/semantic-creation-pilot-15.md)
+and the [100-item direct and independent review, with every example](docs/semantic-review-100.md).
+The latter retains 12 unresolved candidates for inspection; it is not 100 approved
+training rows and documents both judge false accepts and false rejects.
 
 Quality acceptance is **not reader verification**. Export without reader proofs
 retains `verification: none`; it never fabricates a blind-reader proof.
