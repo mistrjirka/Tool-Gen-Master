@@ -88,6 +88,9 @@ New semantic specs carry optional schema-derived exploration cues; these guide
 coverage, not user facts or quality vetoes. The critic receives a readable,
 source-first brief. The [12-case calibration and matched 30-item follow-up](docs/semantic-revision-pilot-30.md)
 show mixed results, including remaining false accepts: **not unattended scale-up readiness**.
+The [creator-I/O audit, low-reasoning probes and goal-first solver analysis](docs/creator-io-and-planning.md)
+explain the remaining representation problems. Low reasoning is available only as
+an explicit per-invocation client opt-in; production creator/judge defaults stay off.
 
 Quality acceptance is **not reader verification**. Export without reader proofs
 retains `verification: none`; it never fabricates a blind-reader proof.

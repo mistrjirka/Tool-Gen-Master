@@ -27,6 +27,7 @@ from contextlib import ExitStack, suppress
 from dataclasses import dataclass
 from decimal import ROUND_DOWN, ROUND_UP, Decimal, InvalidOperation
 from pathlib import Path
+from typing import Literal
 
 import jsonschema
 from typing_extensions import Self
@@ -35,6 +36,9 @@ API_URL = "https://openrouter.ai/api/v1/chat/completions"
 SCHEMA_NAME = "tool_composition"
 DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
 MAX_TOKENS_CAP = 4096
+# Explicit low-reasoning probes need room for reasoning plus visible JSON.
+# Normal/default requests keep the original ceiling; spend is still reserved.
+REASONING_MAX_TOKENS_CAP = 8192
 # provider.max_price values are USD per MILLION tokens. These are the enforced
 # ceilings, deliberately above the current live rates (prompt $0.045, completion
 # $0.50): a returned `request` fee of 0 bounds any per-request surcharge.
@@ -502,11 +506,15 @@ class BudgetedClient:
         schema: dict[str, object],
         temperature: float = 0.7,
         max_tokens: int = MAX_TOKENS_CAP,
+        *,
+        reasoning_effort: Literal["low"] | None = None,
     ) -> dict[str, object]:
         """One budgeted call. Raises ClientError/BudgetError instead of half-succeeding.
 
         A string payload is sent as the literal human-readable user message;
         a dict payload keeps the legacy compact-JSON user message.
+        Explicit low reasoning is opt-in per invocation; defaults remain off.
+        Reasoning text is excluded, and all completion tokens share the same cap.
         """
         if self._closed:
             raise ClientError("client is closed")
@@ -526,11 +534,16 @@ class BudgetedClient:
             raise ClientError("schema must be a JSON object")
         if type(temperature) is not float or not 0.0 <= temperature <= 2.0:
             raise ClientError("temperature must be a float between 0 and 2")
+        if reasoning_effort is not None and reasoning_effort != "low":
+            raise ClientError("reasoning_effort must be low or None (disabled)")
         if type(max_tokens) is not int or max_tokens < 1:
             raise ClientError("max_tokens must be a positive integer")
-        if max_tokens > MAX_TOKENS_CAP:
+        token_cap = (
+            MAX_TOKENS_CAP if reasoning_effort is None else REASONING_MAX_TOKENS_CAP
+        )
+        if max_tokens > token_cap:
             raise ClientError(
-                f"max_tokens must stay within the client cap of {MAX_TOKENS_CAP}"
+                f"max_tokens must stay within the client cap of {token_cap}"
             )
         if self._ledger.stopped:
             raise BudgetError(
@@ -558,7 +571,11 @@ class BudgetedClient:
                 "type": "json_schema",
                 "json_schema": {"name": SCHEMA_NAME, "strict": True, "schema": schema},
             },
-            "reasoning": {"enabled": False},
+            "reasoning": (
+                {"enabled": False}
+                if reasoning_effort is None
+                else {"effort": reasoning_effort, "exclude": True}
+            ),
             "provider": {
                 "require_parameters": True,
                 "max_price": {
