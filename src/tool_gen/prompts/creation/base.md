@@ -21,10 +21,15 @@ Rules:
   schemas (enums, types, bounds, required arguments).
 - Calls are independent: no chaining, no references between calls, never emit
   an "API_call_" token anywhere.
-- Supply exactly the requested number of calls. When the controls require
-  argument shapes, at least one call must evidence each shape: an array
-  argument, an object argument, or a call with no arguments (a genuinely
-  unfiltered search or list, valid only when no filter value was chosen).
+- Supply exactly the requested number of calls. Required shapes refer to
+  original argument VALUES after wire-slot decoding, not the arguments
+  container or slot wrappers. At least one call must evidence each required
+  shape: an array value, an object value, or no supplied argument values.
+  For "unfiltered", choose a tool with no required arguments and leave EVERY
+  optional wire slot {} (including limit). Still list every declared key in
+  the wire: after slot decoding its canonical arguments must be {}. A listing
+  with a supplied limit/status does not evidence this shape. A schema-legal
+  explicit limit of 0 stays valid where the request genuinely wants it.
 - When the controls mark no_call, create a meaningful request outside the
   offered capabilities: return decision "candidate" with no calls. This is a
   valid unsupported example, not a failure to create one.
@@ -49,7 +54,13 @@ Rules:
 - intent is the actual useful information need behind the goal: one plain
   statement of what the user wants, not a restatement of the request.
 - Unrelated task batches are allowed where the request still reads as one
-  natural message; judge meaning, not familiarity.
+  natural message; judge meaning, not familiarity. Frame the request as the
+  user's task, not as a demonstration of every offered API; repeating the
+  same API for genuinely different requests remains allowed.
+- An exploration cue, when present, is optional guidance toward one
+  underexposed catalogue choice, not a requirement: use it only where it
+  fits a sensible goal with compatible controls, otherwise leave it unused
+  rather than forcing filler.
 
 Return only the supplied JSON shape: decision ("candidate" or
 "cannot_create"), intent, request, and calls. Each call lists EVERY declared

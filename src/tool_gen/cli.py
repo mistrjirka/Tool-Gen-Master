@@ -106,8 +106,8 @@ def cmd_create(args: argparse.Namespace) -> int:
                 "num": str(args.num),
                 "seed": str(args.seed),
                 "max_attempts": str(args.max_attempts),
-                "contract": "semantic-creation-v1",
-                "quality_contract": "quality-operations-v2",
+                "contract": "semantic-creation-v2",
+                "quality_contract": "quality-operations-v3",
             },
             inputs=_input_files([source_path]),
         )

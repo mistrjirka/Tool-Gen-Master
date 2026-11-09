@@ -61,6 +61,7 @@ class CreationSpec(StrictModel):
     context: dict[str, JsonValue] = Field(default_factory=dict)
     call_count: int = Field(ge=0)
     required_shapes: list[ShapeName] = Field(default_factory=list)
+    exploration_cue: str | None = Field(default=None)
 
     @model_validator(mode="after")
     def _coherent_controls(self) -> CreationSpec:
@@ -141,6 +142,129 @@ def _draft_shapes(witness: list[dict[str, object]]) -> list[ShapeName]:
     return found
 
 
+def _scalar_enum_candidates(
+    tools: list[dict[str, object]],
+) -> list[tuple[str, str, str]]:
+    """Eligible (tool, dotted-param, value) cue candidates from catalogue schemas.
+
+    Only scalar string enums on original parameters (including nested original
+    objects such as ``searchBooks.filter.genre``). Eligibility follows the
+    original schema type: array-typed parameters (projection/output-key
+    lists, whose items carry an enum of record keys) describe output keys,
+    not interchangeable query values, and are excluded by type, as is any
+    parameter whose declared description states projection semantics. No type
+    escapes: values are plain strings.
+    """
+    candidates: set[tuple[str, str, str]] = set()
+
+    def walk(tool: str, path: str, schema: object) -> None:
+        if not isinstance(schema, dict):
+            return
+        description = str(schema.get("description", "")).lower()
+        if "projection" in description or "record keys" in description:
+            return
+        enum = schema.get("enum")
+        if (
+            isinstance(enum, list)
+            and enum
+            and all(isinstance(v, str) for v in enum)
+            and schema.get("type") == "string"
+        ):
+            for value in enum:
+                assert isinstance(value, str)
+                candidates.add((tool, path, value))
+            return
+        sub = schema.get("properties")
+        if isinstance(sub, dict):
+            for sname, sspec in sub.items():
+                if isinstance(sname, str):
+                    walk(tool, f"{path}.{sname}" if path else sname, sspec)
+
+    for entry in tools:
+        if not isinstance(entry, dict):
+            continue
+        function = entry.get("function")
+        if not isinstance(function, dict):
+            continue
+        name = function.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        parameters = function.get("parameters")
+        if not isinstance(parameters, dict):
+            continue
+        properties = parameters.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        for pname, pspec in properties.items():
+            if isinstance(pname, str):
+                walk(name, pname, pspec)
+    # Deterministic pool order so every caller derives identical cues.
+    return sorted(candidates)
+
+
+def _cue_text(tool: str, param: str, value: str) -> str:
+    return (
+        "Exploration cue (optional, ignore if it does not fit a sensible goal): "
+        f"consider planning one call with {tool} where {param} is {value!r}. "
+        "Use it only for a genuinely fitting request; never force it."
+    )
+
+
+def _cue_selector(spec_id: str) -> int:
+    digest = hashlib.sha256(f"exploration-cue-v1:{spec_id}".encode()).digest()
+    return int.from_bytes(digest[:8], "big")
+
+
+def _cue_eligible(spec: CreationSpec) -> bool:
+    """Obviously impossible cue situations are skipped instead of filler."""
+    if spec.no_call:
+        return False
+    return not (spec.call_count == 1 and spec.required_shapes == ["unfiltered"])
+
+
+def attach_exploration_cues(specs: list[CreationSpec]) -> list[CreationSpec]:
+    """Return copies of the batch with deterministic cues attached.
+
+    Balances *planned* cue exposure within these immutable specs via a simple
+    local count: each newly cued spec takes among its own available
+    (tool, param, value) options one with the lowest planned count so far,
+    with a deterministic id-hash tie-break. No observed-corpus claim, no
+    shared scheduler, no extra workflow or state: the count lives only in
+    this call, so the same input list always yields the same cues. Lets the
+    parent reuse the exact same cues on preselected saved specs without
+    resampling catalogues, counts, shapes or ids. Specs that already carry a
+    cue keep it (and seed the count when the cue matches one of their own
+    options); cue-less saved specs (default absent) stay compatible; a
+    deterministic selected subset stays uncued so uncued variety survives.
+    """
+    planned: dict[tuple[str, str, str], int] = {}
+    for spec in specs:
+        if spec.exploration_cue is None:
+            continue
+        for triple in _scalar_enum_candidates(spec.tools):
+            if _cue_text(*triple) == spec.exploration_cue:
+                planned[triple] = planned.get(triple, 0) + 1
+                break
+    out: list[CreationSpec] = []
+    for spec in specs:
+        if spec.exploration_cue is not None:
+            out.append(spec)
+            continue
+        cue: str | None = None
+        if _cue_eligible(spec):
+            candidates = _scalar_enum_candidates(spec.tools)
+            if candidates:
+                selector = _cue_selector(spec.id)
+                if selector % 2 == 0:
+                    least = min(planned.get(t, 0) for t in candidates)
+                    tied = [t for t in candidates if planned.get(t, 0) == least]
+                    triple = tied[(selector >> 1) % len(tied)]
+                    cue = _cue_text(*triple)
+                    planned[triple] = planned.get(triple, 0) + 1
+        out.append(spec.model_copy(update={"exploration_cue": cue}))
+    return out
+
+
 def sample_specs(n: int, seed: int) -> list[CreationSpec]:
     """Deterministic structural specs with fresh ``semantic-`` ids.
 
@@ -170,20 +294,19 @@ def sample_specs(n: int, seed: int) -> list[CreationSpec]:
             raise ValueError(f"draft {i}: missing family_id")
         if not isinstance(style, str) or not style:
             raise ValueError(f"draft {i}: missing style")
-        specs.append(
-            CreationSpec(
-                id=f"semantic-{seed}-{i:04d}",
-                split="train",
-                family_id=family,
-                style=style,
-                no_call=no_call,
-                tools=[t for t in tools if isinstance(t, dict)],
-                context={},
-                call_count=0 if no_call else len(calls),
-                required_shapes=[] if no_call else _draft_shapes(calls),
-            )
+        spec = CreationSpec(
+            id=f"semantic-{seed}-{i:04d}",
+            split="train",
+            family_id=family,
+            style=style,
+            no_call=no_call,
+            tools=[t for t in tools if isinstance(t, dict)],
+            context={},
+            call_count=0 if no_call else len(calls),
+            required_shapes=[] if no_call else _draft_shapes(calls),
         )
-    return specs
+        specs.append(spec)
+    return attach_exploration_cues(specs)
 
 
 def _public_contracts(tools: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -229,6 +352,8 @@ def build_creation_brief(spec: CreationSpec, feedback: str = "") -> str:
         "",
         "Choose the goal jointly and return only the supplied JSON shape.",
     ]
+    if spec.exploration_cue:
+        lines += ["", spec.exploration_cue]
     if feedback:
         lines += ["", "---", "Retry guidance (same controls, no new facts):", feedback]
     return "\n".join(lines)

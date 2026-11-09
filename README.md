@@ -84,6 +84,11 @@ and the [100-item direct and independent review, with every example](docs/semant
 The latter retains 12 unresolved candidates for inspection; it is not 100 approved
 training rows and documents both judge false accepts and false rejects.
 
+New semantic specs carry optional schema-derived exploration cues; these guide
+coverage, not user facts or quality vetoes. The critic receives a readable,
+source-first brief. The [12-case calibration and matched 30-item follow-up](docs/semantic-revision-pilot-30.md)
+show mixed results, including remaining false accepts: **not unattended scale-up readiness**.
+
 Quality acceptance is **not reader verification**. Export without reader proofs
 retains `verification: none`; it never fabricates a blind-reader proof.
 
